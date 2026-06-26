@@ -1,0 +1,11 @@
+{:id          :isaac.cli-proxy
+ :version     "0.1.0"
+ :factory     isaac.module.protocol/module
+ :description "Remote CLI proxy: `isaac remote <url>/cli <cmd...>` ships argv and pipes local stdio to a server's /cli endpoint. Generalizes the `acp --remote` proxy. See PROTOCOL.md."
+
+ ;; CLI command contributed via the :isaac/cli berth. The implementing
+ ;; namespace registers isaac.cli.api/run + /option-spec methods for :remote.
+ :isaac/cli
+ {:remote {:usage     "remote <url>/cli <command...>"
+           :summary   "Run an isaac command on a remote server over /cli"
+           :namespace isaac.cli-proxy.cli}}}

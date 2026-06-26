@@ -1,0 +1,34 @@
+{:paths ["src"]
+
+ ;; isaac-cli-proxy is a module: it contributes the `remote` CLI command
+ ;; (:isaac/cli berth). `isaac remote <url>/cli <cmd...>` opens a WebSocket to a
+ ;; server's /cli endpoint, ships argv, pipes local stdio, and exits with the
+ ;; server's code. Generalizes the `acp --remote` proxy. The ws client uses the
+ ;; JDK's built-in java.net.http.WebSocket — no extra transport dep. See PROTOCOL.md.
+ :deps  {io.github.slagyr/isaac-foundation {:git/url "https://github.com/slagyr/isaac-foundation.git"
+                                            :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"}
+         cheshire/cheshire     {:mvn/version "5.13.0"}
+         org.clojure/tools.cli {:mvn/version "1.1.230"}}
+
+ :aliases
+ {:dev-local {:override-deps {io.github.slagyr/isaac-foundation              {:local/root "../isaac-foundation"}
+                              io.github.slagyr/isaac-foundation-spec         {:local/root "../isaac-foundation/spec"}
+                              io.github.slagyr/isaac-foundation-test-support {:local/root "../isaac-foundation/spec-support"}
+                              marigold.bridge/marigold.bridge                {:local/root "../isaac-foundation/modules/marigold.bridge"}
+                              marigold.longwave/marigold.longwave            {:local/root "../isaac-foundation/modules/marigold.longwave"}}}
+
+  :spec {:extra-paths ["spec"]
+         :extra-deps  {io.github.slagyr/isaac-foundation-spec         {:git/url "https://github.com/slagyr/isaac-foundation.git" :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5" :deps/root "spec"}
+                       io.github.slagyr/isaac-foundation-test-support {:git/url "https://github.com/slagyr/isaac-foundation.git" :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5" :deps/root "spec-support"}
+                       speclj/speclj            {:mvn/version "3.13.0"}
+                       babashka/process         {:mvn/version "0.5.22"}
+                       io.github.slagyr/gherclj {:git/tag "v1.3.0" :git/sha "9c3bb1d"}}
+         :main-opts   ["-m" "speclj.main" "-c" "-D" "spec"]}
+
+  :features {:extra-paths ["spec"]
+             :extra-deps  {io.github.slagyr/isaac-foundation-spec         {:git/url "https://github.com/slagyr/isaac-foundation.git" :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5" :deps/root "spec"}
+                           io.github.slagyr/isaac-foundation-test-support {:git/url "https://github.com/slagyr/isaac-foundation.git" :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5" :deps/root "spec-support"}
+                           speclj/speclj            {:mvn/version "3.13.0"}
+                           babashka/process         {:mvn/version "0.5.22"}
+                           io.github.slagyr/gherclj {:git/tag "v1.3.0" :git/sha "9c3bb1d"}}
+             :main-opts   ["-m" "gherclj.main" "-f" "features" "-s" "isaac.**-steps" "-t" "~slow" "-t" "~wip"]}}}
