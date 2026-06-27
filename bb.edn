@@ -15,9 +15,14 @@
             :task (do (babashka.fs/delete-tree "target")
                       (apply shell "clojure" (str alias-prefix ":features") *command-line-args*))}
 
+  features-slow {:doc  "Run @slow integration features only"
+                 :task (do (babashka.fs/delete-tree "target")
+                           (apply shell "clojure" (str alias-prefix ":features:features-slow") *command-line-args*))}
+
   ci       {:doc  "Run all specs and features"
             :task (do (shell "bb" "spec")
-                      (shell "bb" "features"))}
+                      (shell "bb" "features")
+                      (shell "bb" "features-slow"))}
 
   clean    {:doc  "Remove the target/ build dir"
             :task (babashka.fs/delete-tree "target")}}}

@@ -36,6 +36,22 @@
       (catch Exception e
         (log/error :stdin-pump/error :throwable e)))))
 
+(defn- authentication-error? [error]
+  (let [cause  (loop [e error]
+                 (if-let [c (ex-cause e)]
+                   (recur c)
+                   e))
+        class-name (.getName (class cause))
+        message    (or (.getMessage cause) "")]
+    (or (= "java.net.http.WebSocketHandshakeException" class-name)
+        (re-find #"(?i)401|unauthorized|authentication failed" message))))
+
+(defn- print-connect-error! [error url]
+  (binding [*out* *err*]
+    (println (if (authentication-error? error)
+               "authentication failed"
+               (str "could not connect to remote CLI endpoint: " url)))))
+
 (defn- await-exit-code! [conn stdin-fut]
   (loop []
     (if-let [line (ws/ws-receive! conn)]
@@ -65,11 +81,15 @@
    server's exit code."
   [{:keys [url argv token cwd connection-factory]
     :or   {argv []}}]
-  (let [factory (or connection-factory *connection-factory* ws/connect!)
-        conn    (factory url {:headers (bearer-headers token)})]
-    (try
-      (ws/ws-send! conn (protocol/encode-frame (apply protocol/start-frame argv
-                                                      (when cwd [:cwd cwd]))))
-      (await-exit-code! conn (pump-stdin! conn))
-      (finally
-        (ws/ws-close! conn)))))
+  (try
+    (let [factory (or connection-factory *connection-factory* ws/connect!)
+          conn    (factory url {:headers (bearer-headers token)})]
+      (try
+        (ws/ws-send! conn (protocol/encode-frame (apply protocol/start-frame argv
+                                                        (when cwd [:cwd cwd]))))
+        (await-exit-code! conn (pump-stdin! conn))
+        (finally
+          (ws/ws-close! conn))))
+    (catch Exception e
+      (print-connect-error! e url)
+      1)))
