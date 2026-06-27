@@ -8,20 +8,58 @@
 
    See PROTOCOL.md for the wire contract."
   (:require
-    [isaac.cli.api :as cli-api]))
+    [clojure.string :as str]
+    [isaac.cli.api :as cli-api]
+    [isaac.cli.registry :as registry]
+    [isaac.cli-proxy.proxy :as proxy]
+    [isaac.config.cli.common :as cli-common]))
 
-(defmethod cli-api/option-spec :remote [_id]
+(def option-spec
   [[nil "--token TOKEN" "Bearer token for remote authentication"]
    ["-h" "--help" "Show help"]])
 
-;; ---------------------------------------------------------------------------
-;; M1 TODO:
-;;   - parse <url> + remaining argv (the command to run remotely) from opts.
-;;   - open a ws to <url>; send {:type "start" :argv [...] :cwd ...}.
-;;   - print {:type "stdout"} frames to *out*; exit with {:type "exit" :code}.
-;;   - no command -> request usage (empty argv) and print it.
-;; ---------------------------------------------------------------------------
+(defmethod cli-api/option-spec :remote [_id]
+  option-spec)
 
-(defmethod cli-api/run :remote [_id _opts]
-  (binding [*out* *err*] (println "remote: not implemented yet (M1)"))
-  1)
+(defn- parse-remote-opts [raw-args]
+  (let [{:keys [arguments errors options]}
+        (cli-common/parse-option-map (vec (or raw-args [])) option-spec)]
+    (cond-> {:errors (or errors [])}
+      (seq errors)  identity
+      :else         (assoc :url (first arguments)
+                           :remote-argv (vec (rest arguments))
+                           :token (:token options)
+                           :help (:help options)))))
+
+(defn run [opts]
+  (let [{:keys [url remote-argv token help errors]} (parse-remote-opts (:_raw-args opts))]
+    (cond
+      help
+      (do (println (registry/command-help (registry/get-command "remote"))) 0)
+
+      (seq errors)
+      (cli-common/print-cli-errors! errors)
+
+      (or (nil? url) (str/blank? url))
+      (cli-common/print-cli-error! "remote: missing WebSocket URL")
+
+      :else
+      (proxy/run-proxy! {:url           url
+                   :argv          remote-argv
+                   :token         token
+                   :connection-factory (:connection-factory opts)}))))
+
+(defn run-fn [opts]
+  (run opts))
+
+(defn make-command
+  "Factory for feature tests and module registration."
+  []
+  {:name        "remote"
+   :usage       "remote <url>/cli -- <command...>"
+   :summary     "Run an isaac command on a remote server over /cli"
+   :option-spec option-spec
+   :run-fn      run-fn})
+
+(defmethod cli-api/run :remote [_id opts]
+  (run-fn opts))
