@@ -1,6 +1,6 @@
 (ns isaac.cli-proxy.feature-bootstrap
-  "Loaded after isaac.**-steps so duplicate session-tier steps that collide
-   with server-tier definitions can be dropped from the gherclj registry."
+  "Loaded after isaac.**-steps. Drops colliding session/harness steps when the
+   server harness is present."
   (:require [clojure.string :as str]))
 
 (def ^:private server-ns 'isaac.server.server-steps)
@@ -30,12 +30,12 @@
          (fn [m]
            (into {}
                  (map (fn [[ns-sym entries]]
-                        (cond
-                          (= ns-sym session-ns)
-                          [ns-sym (without-templates entries (session-drop-templates m))]
+                        [ns-sym (cond
+                                  (= ns-sym session-ns)
+                                  (without-templates entries (session-drop-templates m))
 
-                          (= ns-sym harness-ns)
-                          [ns-sym (without-templates entries (harness-drop-templates m))]
+                                  (= ns-sym harness-ns)
+                                  (without-templates entries (harness-drop-templates m))
 
-                          :else [ns-sym entries])))
+                                  :else entries)]))
                  m))))

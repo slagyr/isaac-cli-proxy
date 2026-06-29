@@ -1,28 +1,85 @@
-{:tasks
- ;; Tests run via JVM clojure aliases (deps.edn :spec / :features). When
- ;; ../isaac-foundation exists, :dev-local overrides the pinned foundation dep
- ;; with the local sibling. Set ISAAC_GIT=1 to force the pinned git shas.
- {:init (def ^:private alias-prefix
-          (if (and (not (System/getenv "ISAAC_GIT"))
-                   (babashka.fs/exists? "../isaac-foundation"))
-            "-M:dev-local"
-            "-M"))
+{:paths ["src" "spec" "features"]
 
-  spec     {:doc  "Run cli-proxy unit specs"
-            :task (apply shell "clojure" (str alias-prefix ":spec") *command-line-args*)}
+ ;; Babashka runs specs/features directly (no clojure subprocess). Git coords
+ ;; match deps.edn — keep SHAs in sync when bumping foundation/agent/server.
+ :deps  {io.github.slagyr/isaac-foundation              {:git/url "https://github.com/slagyr/isaac-foundation.git"
+                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"}
+         io.github.slagyr/isaac-foundation-spec         {:git/url "https://github.com/slagyr/isaac-foundation.git"
+                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :deps/root "spec"}
+         io.github.slagyr/isaac-agent                     {:git/url "https://github.com/slagyr/isaac-agent.git"
+                                                          :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"}
+         io.github.slagyr/isaac-agent-spec               {:git/url "https://github.com/slagyr/isaac-agent.git"
+                                                          :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"
+                                                          :deps/root "spec"}
+         io.github.slagyr/isaac-server                    {:git/url "https://github.com/slagyr/isaac-server.git"
+                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"}
+         io.github.slagyr/isaac-server-spec               {:git/url "https://github.com/slagyr/isaac-server.git"
+                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
+                                                          :deps/root "spec"}
+         io.github.slagyr/isaac-server-test-support       {:git/url "https://github.com/slagyr/isaac-server.git"
+                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
+                                                          :deps/root "spec-support"}
+         io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
+                                                          :git/sha "96df1ccaa56e4c9dd6d067ef1debd693ec029ed2"}
+         marigold.bridge/marigold.bridge                  {:git/url "https://github.com/slagyr/isaac-foundation.git"
+                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :deps/root "modules/marigold.bridge"}
+         marigold.longwave/marigold.longwave              {:git/url "https://github.com/slagyr/isaac-foundation.git"
+                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :deps/root "modules/marigold.longwave"}
+         clout/clout                                      {:mvn/version "1.1.0"}
+         com.cleancoders.c3kit/apron                      {:mvn/version "3.0.0"}
+         io.github.cleancoders/c3kit-wire                 {:git/tag "2.5.1" :git/sha "1fae444"}
+         cheshire/cheshire                                {:mvn/version "5.13.0"}
+         http-kit/http-kit                                {:mvn/version "2.8.0"}
+         ring/ring-codec                                  {:mvn/version "1.2.0"}
+         org.clojure/tools.cli                            {:mvn/version "1.1.230"}
+         org.babashka/http-client                         {:mvn/version "0.4.22"}
+         babashka/process                                 {:mvn/version "0.5.22"}
+         speclj/speclj                                    {:mvn/version "3.13.0"}
+         io.github.slagyr/gherclj                         {:git/tag "v1.3.0" :git/sha "9c3bb1d"}}
+
+ :tasks
+ {spec     {:doc  "Run cli-proxy unit specs (pass file/dir to narrow)"
+            :requires ([speclj.main :as speclj])
+            :task     (if (seq *command-line-args*)
+                        (apply speclj/-main "-c" "-D" "spec" *command-line-args*)
+                        (speclj/-main "-c" "-D" "spec"))}
 
   features {:doc  "Run cli-proxy features (excludes @slow and @wip)"
-            :task (do (babashka.fs/delete-tree "target")
-                      (apply shell "clojure" (str alias-prefix ":features") *command-line-args*))}
+            :requires ([gherclj.main :as gherclj])
+            :task     (do
+                        (babashka.fs/delete-tree "target")
+                        (println "Cleaned target/")
+                        (apply gherclj/-main
+                          (concat ["-f" "features"]
+                                  ["-s" "isaac.**-steps"
+                                   "-s" "isaac.cli-proxy.feature-bootstrap"
+                                   "-t" "~slow"
+                                   "-t" "~wip"]
+                                  *command-line-args*)))}
 
   features-slow {:doc  "Run @slow integration features only"
-                 :task (do (babashka.fs/delete-tree "target")
-                           (apply shell "clojure" (str alias-prefix ":features:features-slow") *command-line-args*))}
+                 :requires ([gherclj.main :as gherclj])
+                 :task     (do
+                             (babashka.fs/delete-tree "target")
+                             (println "Cleaned target/")
+                             (apply gherclj/-main
+                               (concat ["-f" "features"]
+                                       ["-s" "isaac.**-steps"
+                                        "-s" "isaac.cli-proxy.feature-bootstrap"
+                                        "-t" "slow"
+                                        "-t" "~wip"]
+                                       *command-line-args*)))}
 
   ci       {:doc  "Run all specs and features"
-            :task (do (shell "bb" "spec")
-                      (shell "bb" "features")
-                      (shell "bb" "features-slow"))}
+            :task (let [spec-result (shell "bb" "spec")
+                        feat-result (shell "bb" "features")
+                        slow-result (shell "bb" "features-slow")]
+                    (when (pos? (:exit spec-result)) (System/exit (:exit spec-result)))
+                    (when (pos? (:exit feat-result)) (System/exit (:exit feat-result)))
+                    (when (pos? (:exit slow-result)) (System/exit (:exit slow-result))))}
 
   clean    {:doc  "Remove the target/ build dir"
             :task (babashka.fs/delete-tree "target")}}}

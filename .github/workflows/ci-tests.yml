@@ -1,0 +1,38 @@
+name: CI Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NO_COLOR: "1"
+    steps:
+      - name: Check out isaac-cli-proxy
+        uses: actions/checkout@v4
+
+      - name: Set up Babashka
+        uses: DeLaGuardo/setup-clojure@13.2
+        with:
+          bb: latest
+
+      - name: Cache Babashka dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: ${{ runner.os }}-bb-cli-proxy-${{ hashFiles('bb.edn') }}
+          restore-keys: |
+            ${{ runner.os }}-bb-cli-proxy-
+
+      - name: Run bb ci
+        run: bb ci
