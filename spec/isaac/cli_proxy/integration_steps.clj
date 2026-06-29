@@ -35,13 +35,12 @@
   (some-> url io/reader slurp edn/read-string))
 
 (defn- cli-server-manifest-from-classpath []
-  (let [loader (.getSystemClassLoader java.lang.ClassLoader)
-        urls   (enumeration-seq (.getResources loader "isaac-manifest.edn"))]
+  (when-let [loader (.getContextClassLoader (Thread/currentThread))]
     (some (fn [url]
             (let [manifest (cli-server-manifest-from-url url)]
               (when (= :isaac.cli-server (:id manifest))
                 manifest)))
-          urls)))
+          (enumeration-seq (.getResources loader "isaac-manifest.edn")))))
 
 (defn- cli-server-manifest []
   (or (some-> (cli-server-sibling-root)
