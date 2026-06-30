@@ -41,7 +41,10 @@
          io.github.slagyr/gherclj                         {:git/tag "v1.3.0" :git/sha "9c3bb1d"}}
 
  :tasks
- {spec     {:doc  "Run cli-proxy unit specs (pass file/dir to narrow)"
+ {config-bypass-lint {:doc "Fail on raw config slurp/read outside isaac.config.*"
+                      :task (shell "bb" "config_bypass_lint.bb" "src")}
+
+  spec     {:doc  "Run cli-proxy unit specs (pass file/dir to narrow)"
             :requires ([speclj.main :as speclj])
             :task     (if (seq *command-line-args*)
                         (apply speclj/-main "-c" "-D" "spec" *command-line-args*)
@@ -74,12 +77,14 @@
                                        *command-line-args*)))}
 
   ci       {:doc  "Run all specs and features"
-            :task (let [spec-result (shell "bb" "spec")
-                        feat-result (shell "bb" "features")
-                        slow-result (shell "bb" "features-slow")]
-                    (when (pos? (:exit spec-result)) (System/exit (:exit spec-result)))
-                    (when (pos? (:exit feat-result)) (System/exit (:exit feat-result)))
-                    (when (pos? (:exit slow-result)) (System/exit (:exit slow-result))))}
+            :task (do
+                    (run 'config-bypass-lint)
+                    (let [spec-result (shell "bb" "spec")
+                          feat-result (shell "bb" "features")
+                          slow-result (shell "bb" "features-slow")]
+                      (when (pos? (:exit spec-result)) (System/exit (:exit spec-result)))
+                      (when (pos? (:exit feat-result)) (System/exit (:exit feat-result)))
+                      (when (pos? (:exit slow-result)) (System/exit (:exit slow-result)))))}
 
   clean    {:doc  "Remove the target/ build dir"
             :task (babashka.fs/delete-tree "target")}}}
