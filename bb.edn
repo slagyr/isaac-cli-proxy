@@ -3,33 +3,33 @@
  ;; Babashka runs specs/features directly (no clojure subprocess). Git coords
  ;; match deps.edn — keep SHAs in sync when bumping foundation/agent/server.
  :deps  {io.github.slagyr/isaac-foundation              {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"}
+                                                          :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"}
          io.github.slagyr/isaac-foundation-spec         {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-foundation-test-support {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                           :git/sha "44e824c6eded90301ed1aba8ed3948c66725ee43"
+                                                           :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"
                                                            :deps/root "spec-support"}
          io.github.slagyr/isaac-agent                     {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                          :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"}
+                                                          :git/sha "153baa684c42c43bda46d5975e6f7f973a533568"}
          io.github.slagyr/isaac-agent-spec               {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                          :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"
+                                                          :git/sha "153baa684c42c43bda46d5975e6f7f973a533568"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-server                    {:git/url "https://github.com/slagyr/isaac-server.git"
-                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"}
+                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"}
          io.github.slagyr/isaac-server-spec               {:git/url "https://github.com/slagyr/isaac-server.git"
-                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
+                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-server-test-support       {:git/url "https://github.com/slagyr/isaac-server.git"
-                                                          :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
+                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"
                                                           :deps/root "spec-support"}
          io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
                                                           :git/sha "96df1ccaa56e4c9dd6d067ef1debd693ec029ed2"}
          marigold.bridge/marigold.bridge                  {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"
                                                           :deps/root "modules/marigold.bridge"}
          marigold.longwave/marigold.longwave              {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "305c337a69427cebbd2ae5471ac6684f0ae321a5"
+                                                          :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"
                                                           :deps/root "modules/marigold.longwave"}
          clout/clout                                      {:mvn/version "1.1.0"}
          com.cleancoders.c3kit/apron                      {:mvn/version "3.0.0"}
