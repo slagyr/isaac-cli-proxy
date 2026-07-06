@@ -67,9 +67,7 @@
 (defn- maybe-close-after-send! [server]
   (when (g/get :stub-drop-after-send?)
     (g/assoc! :stub-drop-after-send? false)
-    (future
-      (Thread/sleep 10)
-      (ws/ws-close! server))))
+    (ws/ws-close! server)))
 
 (defn- handle-stub-session! [server]
   (loop []
