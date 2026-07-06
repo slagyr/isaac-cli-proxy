@@ -16,6 +16,9 @@
   (cond-> {:type "start" :argv (vec (or argv []))}
     cwd (assoc :cwd cwd)))
 
+(defn attach-frame [stream-id]
+  {:type "attach" :stream-id stream-id})
+
 (defn stdin-frame [text]
   {:type "stdin" :data (b64-encode text)})
 
@@ -26,5 +29,8 @@
   (json/generate-string frame))
 
 (defn parse-frame [line]
-  (when (seq line)
-    (json/parse-string line true)))
+  (cond
+    (string? line) (when (seq line)
+                     (json/parse-string line true))
+    (map? line)    line
+    :else          nil))

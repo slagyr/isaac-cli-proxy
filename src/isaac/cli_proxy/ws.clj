@@ -58,25 +58,77 @@
     {:client (->LoopbackWs client-incoming server-incoming client-closed?)
      :server (->LoopbackWs server-incoming client-incoming server-closed?)}))
 
-(defrecord LoopbackTransport [accept-queue connected-queue active-client active-server
-                            connect-headers captured-headers])
+(defn- drain-queue! [queue]
+  (loop []
+    (when (.poll ^LinkedBlockingQueue queue)
+      (recur))))
+
+(defrecord LoopbackTransport [accept-queue connected-queue active-client active-server captured-headers])
 
 (defn loopback-transport []
-  (->LoopbackTransport (LinkedBlockingQueue.) (LinkedBlockingQueue.) (atom nil) (atom nil)
-                       (atom nil) (atom nil)))
+  (->LoopbackTransport (LinkedBlockingQueue.) (LinkedBlockingQueue.) (atom nil) (atom nil) (atom nil)))
 
-(defn connect-loopback! [transport _url {:keys [headers] :as _opts}]
-  (when headers
-    (reset! (:captured-headers transport) headers))
-  (let [{:keys [client server]} (loopback-pair)]
-    (reset! (:active-client transport) client)
-    (reset! (:active-server transport) server)
-    (.put ^LinkedBlockingQueue (:accept-queue transport) server)
-    (.put ^LinkedBlockingQueue (:connected-queue transport) server)
-    client))
+(defrecord ReconnectableTransport [accept-queue connected-queue active-client active-server dropped? permanent? captured-headers])
+
+(defn reconnectable-transport []
+  (->ReconnectableTransport (LinkedBlockingQueue.)
+                            (LinkedBlockingQueue.)
+                            (atom nil)
+                            (atom nil)
+                            (atom false)
+                            (atom false)
+                            (atom nil)))
+
+(defn connect-loopback!
+  ([transport url]
+   (connect-loopback! transport url {}))
+  ([transport _url {:keys [headers] :as _opts}]
+   (when-let [captured-headers (:captured-headers transport)]
+     (reset! captured-headers headers))
+   (when (instance? ReconnectableTransport transport)
+     (when @(:permanent? transport)
+       (throw (ex-info "loopback unavailable" {:type :loopback/unavailable})))
+     (when @(:dropped? transport)
+       (throw (ex-info "loopback dropped" {:type :loopback/dropped}))))
+   (let [{:keys [client server]} (loopback-pair)]
+     (reset! (:active-client transport) client)
+     (reset! (:active-server transport) server)
+     (.put ^LinkedBlockingQueue (:accept-queue transport) server)
+     (.put ^LinkedBlockingQueue (:connected-queue transport) server)
+     client)))
 
 (defn accept-loopback! [transport]
   (.poll ^LinkedBlockingQueue (:accept-queue transport) 1000 TimeUnit/MILLISECONDS))
+
+(defn await-loopback-connection! [transport timeout-ms]
+  (or @(:active-server transport)
+      (.poll ^LinkedBlockingQueue (:connected-queue transport) timeout-ms TimeUnit/MILLISECONDS)))
+
+(defn- close-loopback-connections! [transport]
+  (some-> @(:active-client transport) ws-close!)
+  (some-> @(:active-server transport) ws-close!)
+  (drain-queue! (:connected-queue transport)))
+
+(defn drop-loopback! [transport]
+  (when (instance? ReconnectableTransport transport)
+    (reset! (:dropped? transport) true))
+  (close-loopback-connections! transport)
+  nil)
+
+(defn restore-loopback! [transport]
+  (when (instance? ReconnectableTransport transport)
+    (reset! (:dropped? transport) false))
+  (reset! (:active-client transport) nil)
+  (reset! (:active-server transport) nil)
+  (drain-queue! (:connected-queue transport))
+  nil)
+
+(defn drop-loopback-permanently! [transport]
+  (when (instance? ReconnectableTransport transport)
+    (reset! (:dropped? transport) true)
+    (reset! (:permanent? transport) true))
+  (close-loopback-connections! transport)
+  nil)
 
 (deftype RealWs [websocket incoming closed?]
   WsConnection

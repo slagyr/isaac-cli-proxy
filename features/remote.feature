@@ -62,7 +62,6 @@ Feature: remote CLI proxy
     When isaac remote is run with "${stub.url} --token my-secret -- version"
     Then the stub connection authorization is "Bearer my-secret"
     And the exit code is 0
-  @wip
   Scenario: the proxy reattaches after a socket drop and replayed frames render once (isaac-4tn1)
     On a dropped socket the proxy keeps local stdio open, emits status to
     stderr (never stdout), reattaches with the stream-id, and renders replayed
