@@ -1,5 +1,5 @@
 {:id          :isaac.cli-proxy
- :version     "0.1.1"
+ :version     "0.1.2"
  :factory     isaac.module.protocol/module
  :description "Remote CLI proxy: `isaac remote <url>/cli <cmd...>` ships argv and pipes local stdio to a server's /cli endpoint. Generalizes the `acp --remote` proxy. See PROTOCOL.md."
 
