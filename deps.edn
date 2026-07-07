@@ -51,7 +51,7 @@
                                                                           :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
                                                                           :deps/root "spec-support"}
                             io.github.slagyr/isaac-cli-server              {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-                                                                          :git/sha "96df1ccaa56e4c9dd6d067ef1debd693ec029ed2"}
+                                                                          :git/sha "cf80a294fc60b4f45f7d68a7dc559a22af2c27f2"}
                             clout/clout                                    {:mvn/version "1.1.0"}
                             com.cleancoders.c3kit/apron                    {:mvn/version "3.0.0"}
                             http-kit/http-kit                              {:mvn/version "2.8.0"}
