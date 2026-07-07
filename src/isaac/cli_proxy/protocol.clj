@@ -12,9 +12,10 @@
   (when (seq s)
     (String. (.decode (Base64/getDecoder) s) "UTF-8")))
 
-(defn start-frame [argv & {:keys [cwd]}]
+(defn start-frame [argv & {:keys [cwd stdout-tty]}]
   (cond-> {:type "start" :argv (vec (or argv []))}
-    cwd (assoc :cwd cwd)))
+    cwd        (assoc :cwd cwd)
+    stdout-tty (assoc :stdout-tty true)))
 
 (defn attach-frame [stream-id]
   {:type "attach" :stream-id stream-id})

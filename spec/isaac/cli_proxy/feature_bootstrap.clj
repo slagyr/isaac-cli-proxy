@@ -1,7 +1,10 @@
 (ns isaac.cli-proxy.feature-bootstrap
   "Loaded after isaac.**-steps. Drops colliding session/harness steps when the
    server harness is present."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [isaac.logger :as log]))
+
+(log/set-output! :memory)
 
 (def ^:private server-ns 'isaac.server.server-steps)
 (def ^:private session-ns 'isaac.session.session-steps)

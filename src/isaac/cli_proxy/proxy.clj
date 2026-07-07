@@ -8,6 +8,7 @@
 
 (def ^:dynamic *connection-factory* ws/connect!)
 (def ^:dynamic *reconnect-delays-ms* [25 50 100 200])
+(def ^:dynamic *stdout-tty?* #(some? (System/console)))
 
 (defn- bearer-headers [token]
   (when (seq token)
@@ -69,8 +70,10 @@
 
 (defn- start-connection! [factory url argv token cwd]
   (let [conn        (connect! factory url token)
+        stdout-tty  (boolean (*stdout-tty?*))
         _           (ws/ws-send! conn (protocol/encode-frame (apply protocol/start-frame argv
-                                                                    (when cwd [:cwd cwd]))))
+                                                                    (concat (when cwd [:cwd cwd])
+                                                                            (when stdout-tty [:stdout-tty true])))))
         first-frame (first-frame! conn)]
     {:conn         conn
      :initial-frame (when-not (= "start-ack" (:type first-frame)) first-frame)

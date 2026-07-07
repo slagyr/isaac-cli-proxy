@@ -13,6 +13,16 @@ Feature: remote CLI proxy
     And the stdout contains "hello world"
     And the exit code is 0
 
+  Scenario: a tty stdout causes the proxy to forward stdout-tty in the start frame (isaac-nfch)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    When isaac remote is run with "${stub.url} -- sessions list"
+    Then the stub server received frames:
+      | type  | argv                 | stdout-tty |
+      | start | ["sessions","list"] | true       |
+    And the exit code is 0
+
   Scenario: no command prints usage from the server
     Given a stub /cli server that replies with frames:
       | type   | data           | code |

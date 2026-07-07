@@ -6,6 +6,7 @@
     [isaac.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
     [isaac.cli-proxy.protocol :as protocol]
+    [isaac.cli-proxy.proxy]
     [isaac.cli-proxy.ws :as ws]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.spec-helper :as helper]
@@ -39,6 +40,9 @@
 
     (and (contains? row :argv) (not (str/blank? (:argv row))))
     (assoc :argv (edn/read-string (:argv row)))
+
+    (and (contains? row :stdout-tty) (not (str/blank? (:stdout-tty row))))
+    (assoc :stdout-tty (= "true" (:stdout-tty row)))
 
     (and (contains? row :stream-id) (not (str/blank? (:stream-id row))))
     (assoc :stream-id (:stream-id row))))
@@ -145,7 +149,8 @@
         err-w         (java.io.StringWriter.)]
     (binding [*out* out-w
               *err* err-w
-              *in*  (java.io.BufferedReader. (StringReader. stdin-content))]
+              *in*  (java.io.BufferedReader. (StringReader. stdin-content))
+              isaac.cli-proxy.proxy/*stdout-tty?* (constantly true)]
       (g/assoc! :exit-code
                 (remote-cli/run-fn (merge extra-opts {:_raw-args argv}))))
     (g/assoc! :output (str out-w))

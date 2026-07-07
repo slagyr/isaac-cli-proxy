@@ -125,6 +125,38 @@
         (should= 0 code)
         (should= {"Authorization" "Bearer secret"} @headers*))))
 
+  (it "ships stdout tty intent in the start frame when the local stdout is a tty"
+    (let [sent-frame* (atom nil)]
+      (binding [sut/*stdout-tty?* (constantly true)]
+        (empty-stdin-binding
+          (fn []
+            (with-loopback-pair
+              (fn [client]
+                (sut/run-proxy! {:url                "ws://stub/cli"
+                                 :argv               ["sessions" "list"]
+                                 :connection-factory (constantly client)}))
+              (fn [server]
+                (reset! sent-frame* (protocol/parse-frame (ws/ws-receive! server)))
+                (send-frames! server [{:type "start-ack" :stream-id "s-1"}
+                                      {:type "exit" :code 0}]))))))
+      (should= {:type "start" :argv ["sessions" "list"] :stdout-tty true} @sent-frame*)))
+
+  (it "omits stdout tty intent in the start frame when the local stdout is not a tty"
+    (let [sent-frame* (atom nil)]
+      (binding [sut/*stdout-tty?* (constantly false)]
+        (empty-stdin-binding
+          (fn []
+            (with-loopback-pair
+              (fn [client]
+                (sut/run-proxy! {:url                "ws://stub/cli"
+                                 :argv               ["sessions" "list"]
+                                 :connection-factory (constantly client)}))
+              (fn [server]
+                (reset! sent-frame* (protocol/parse-frame (ws/ws-receive! server)))
+                (send-frames! server [{:type "start-ack" :stream-id "s-1"}
+                                      {:type "exit" :code 0}]))))))
+      (should= {:type "start" :argv ["sessions" "list"]} @sent-frame*)))
+
   (it "reattaches after a dropped socket and renders replayed frames once"
     (let [transport (ws/loopback-transport)
           out*      (java.io.StringWriter.)

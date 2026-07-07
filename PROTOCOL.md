@@ -8,7 +8,7 @@ See isaac-cli-server/PROTOCOL.md for the canonical copy.
 
 ## Current lockstep summary
 
-- `start` opens a new remote CLI subprocess.
+- `start` opens a new remote CLI subprocess and may carry `stdout-tty: true` when the proxy's local stdout is a terminal.
 - Server replies with `start-ack` carrying a `stream-id`.
 - On disconnect, server keeps the subprocess alive for a grace window and buffers
   `stdout`/`stderr`/`exit` frames.
