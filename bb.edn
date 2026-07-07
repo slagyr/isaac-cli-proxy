@@ -24,7 +24,7 @@
                                                           :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"
                                                           :deps/root "spec-support"}
          io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-                                                          :git/sha "cf80a294fc60b4f45f7d68a7dc559a22af2c27f2"}
+                                                          :git/sha "8f42058034dfd9c5b3582d2edf27f75618f81992"}
          marigold.bridge/marigold.bridge                  {:git/url "https://github.com/slagyr/isaac-foundation.git"
                                                           :git/sha "7ed8e388d297ea68947ea75d1b21d678d8a03f9d"
                                                           :deps/root "modules/marigold.bridge"}
@@ -83,12 +83,9 @@
   ci       {:doc  "Run all specs and features"
             :task (do
                     (run 'config-bypass-lint)
-                    (let [spec-result (shell "bb" "spec")
-                          feat-result (shell "bb" "features")
-                          slow-result (shell "bb" "features-slow")]
-                      (when (pos? (:exit spec-result)) (System/exit (:exit spec-result)))
-                      (when (pos? (:exit feat-result)) (System/exit (:exit feat-result)))
-                      (when (pos? (:exit slow-result)) (System/exit (:exit slow-result)))))}
+                    (run 'spec)
+                    (run 'features)
+                    (run 'features-slow))}
 
   clean    {:doc  "Remove the target/ build dir"
             :task (babashka.fs/delete-tree "target")}}}

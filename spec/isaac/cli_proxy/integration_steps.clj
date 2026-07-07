@@ -17,7 +17,7 @@
     [isaac.server.server-steps :as server-steps]
     [isaac.util.jsonrpc :as jrpc])
   (:import
-    (java.io BufferedReader InputStreamReader OutputStreamWriter)
+    (java.io BufferedReader File InputStreamReader OutputStreamWriter)
     (java.util.concurrent LinkedBlockingQueue TimeUnit)))
 
 (helper! isaac.cli-proxy.integration-steps)
@@ -26,7 +26,7 @@
 
 (def ^:private cli-server-git-coord
   {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-   :git/sha "cf80a294fc60b4f45f7d68a7dc559a22af2c27f2"})
+   :git/sha "8f42058034dfd9c5b3582d2edf27f75618f81992"})
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
@@ -37,6 +37,7 @@
 (def ^:private fixture-session-name "lcay-session")
 (def ^:private interactive-client-expr
   "(require '[isaac.cli-proxy.cli :as remote-cli]) (System/exit (remote-cli/run-fn {:_raw-args (vec *command-line-args*)}))")
+(def ^:private test-isaac-launcher-script "target/test-bin/isaac")
 
 (defn- ensure-remote-command! []
   (when-not (cli-registry/get-command "remote")
@@ -135,6 +136,22 @@
   (.mkdirs (.getParentFile (io/file path)))
   (spit path content))
 
+(defn- project-root []
+  (System/getProperty "user.dir"))
+
+(defn- test-isaac-launcher-path []
+  (str (project-root) "/" test-isaac-launcher-script))
+
+(defn- ensure-test-isaac-launcher! []
+  (let [script-path (test-isaac-launcher-path)]
+    (write-text! script-path
+                 (str "#!/usr/bin/env bash\n"
+                      "set -euo pipefail\n"
+                      "ROOT=\"$(cd \"$(dirname \"$0\")/../..\" && pwd)\"\n"
+                      "exec /usr/local/bin/bb --config \"$ROOT/bb.edn\" -m isaac.main \"$@\"\n"))
+    (.setExecutable (io/file script-path) true)
+    script-path))
+
 (defn- ensure-acp-fixture-root! []
   (let [root (fixture-root)]
     (delete-tree! root)
@@ -153,6 +170,7 @@
         (str "ws://localhost:" port "/cli"))))
 
 (defn real-cli-server-backed-by-installed-isaac-with-echo-model []
+  (ensure-test-isaac-launcher!)
   (ensure-cli-server-route!)
   (ensure-acp-fixture-root!)
   (g/update! :server-config
@@ -233,7 +251,14 @@
      :future (future (run))}))
 
 (defn- interactive-client-command [argv]
-  (into ["bb" "-e" interactive-client-expr "--"] argv))
+  (into ["/usr/local/bin/bb" "-e" interactive-client-expr "--"] argv))
+
+(defn- with-test-launcher-path [f]
+  (let [launcher-dir (.getParentFile (io/file (test-isaac-launcher-path)))
+        current-path (or (System/getenv "PATH") "")
+        launcher-path (str (.getAbsolutePath launcher-dir) File/pathSeparator current-path)]
+    (binding [process/*defaults* (assoc process/*defaults* :extra-env {"PATH" launcher-path})]
+      (f))))
 
 (defn- interpolate-interactive-args [args]
   (-> args
@@ -266,35 +291,37 @@
 
 (defn isaac-remote-run-interactively [args]
   (reset-interactive-state!)
-  (let [argv          (cli-steps/parse-argv (interpolate-interactive-args args))
-        proc          (process/process (interactive-client-command argv)
-                                       {:dir (System/getProperty "user.dir")
-                                        :in  :pipe
-                                        :out :pipe
-                                        :err :pipe})
-        stdin-writer  (OutputStreamWriter. (:in proc))
-        stdout-reader (BufferedReader. (InputStreamReader. (:out proc)))
-        stderr-reader (BufferedReader. (InputStreamReader. (:err proc)))
-        stdout-drain  (start-line-drain! stdout-reader)
-        stderr-drain  (start-line-drain! stderr-reader)
-        wait-future   (future
-                        (let [process   ^Process (:proc proc)
-                              exit-code (.waitFor process)]
-                          @(:future stdout-drain)
-                          @(:future stderr-drain)
-                          (g/assoc! :output (stdout-text))
-                          (g/assoc! :stderr (stderr-text))
-                          (g/assoc! :exit-code exit-code)
-                          exit-code))]
-    (g/assoc! :interactive-proc proc)
-    (g/assoc! :interactive-stdin-writer stdin-writer)
-    (g/assoc! :interactive-client-future wait-future)
-    (g/assoc! :interactive-stdout-queue (:queue stdout-drain))
-    (g/assoc! :interactive-stdout-lines* (:lines* stdout-drain))
-    (g/assoc! :interactive-stdout-future (:future stdout-drain))
-    (g/assoc! :interactive-stderr-queue (:queue stderr-drain))
-    (g/assoc! :interactive-stderr-lines* (:lines* stderr-drain))
-    (g/assoc! :interactive-stderr-future (:future stderr-drain))))
+  (with-test-launcher-path
+    (fn []
+      (let [argv          (cli-steps/parse-argv (interpolate-interactive-args args))
+            proc          (process/process (interactive-client-command argv)
+                                           {:dir (System/getProperty "user.dir")
+                                            :in  :pipe
+                                            :out :pipe
+                                            :err :pipe})
+            stdin-writer  (OutputStreamWriter. (:in proc))
+            stdout-reader (BufferedReader. (InputStreamReader. (:out proc)))
+            stderr-reader (BufferedReader. (InputStreamReader. (:err proc)))
+            stdout-drain  (start-line-drain! stdout-reader)
+            stderr-drain  (start-line-drain! stderr-reader)
+            wait-future   (future
+                            (let [process   ^Process (:proc proc)
+                                  exit-code (.waitFor process)]
+                              @(:future stdout-drain)
+                              @(:future stderr-drain)
+                              (g/assoc! :output (stdout-text))
+                              (g/assoc! :stderr (stderr-text))
+                              (g/assoc! :exit-code exit-code)
+                              exit-code))]
+        (g/assoc! :interactive-proc proc)
+        (g/assoc! :interactive-stdin-writer stdin-writer)
+        (g/assoc! :interactive-client-future wait-future)
+        (g/assoc! :interactive-stdout-queue (:queue stdout-drain))
+        (g/assoc! :interactive-stdout-lines* (:lines* stdout-drain))
+        (g/assoc! :interactive-stdout-future (:future stdout-drain))
+        (g/assoc! :interactive-stderr-queue (:queue stderr-drain))
+        (g/assoc! :interactive-stderr-lines* (:lines* stderr-drain))
+        (g/assoc! :interactive-stderr-future (:future stderr-drain))))))
 
 (defn- write-client-line! [line]
   (let [writer (g/get :interactive-stdin-writer)]
