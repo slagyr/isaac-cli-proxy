@@ -3,6 +3,7 @@
    /cli route is visible to the server harness (classpath discovery plus an
    explicit inject fallback for sibling checkouts or git-pinned CI)."
   (:require
+    [babashka.fs :as bbs]
     [babashka.process :as process]
     [cheshire.core :as json]
     [clojure.edn :as edn]
@@ -11,6 +12,7 @@
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
     [isaac.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
+    [isaac.cli-server.dispatch :as dispatch]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.fs :as fs]
     [isaac.nexus :as nexus]
@@ -38,12 +40,62 @@
 (def ^:private interactive-client-expr
   "(require '[isaac.cli-proxy.cli :as remote-cli]) (System/exit (remote-cli/run-fn {:_raw-args (vec *command-line-args*)}))")
 (def ^:private test-isaac-launcher-script "target/test-bin/isaac")
+(defonce ^:private prior-launcher-command* (atom nil))
 
 (defn- ensure-remote-command! []
   (when-not (cli-registry/get-command "remote")
     (cli-registry/register! (remote-cli/make-command))))
 
 (cli-steps/register-isaac-run-preflight! ensure-remote-command!)
+
+(defn -resolve-bb-bin
+  "Absolute path to the bb binary driving this process. Prefer PATH lookup so
+   CI (setup-clojure) and local installs both work; fall back to the current
+   process command, then bare `bb`."
+  []
+  (or (some-> (bbs/which "bb") str)
+      (let [cmd (.command (.info (java.lang.ProcessHandle/current)))]
+        (when (.isPresent cmd) (.get cmd)))
+      "bb"))
+
+(defn- write-text! [path content]
+  (.mkdirs (.getParentFile (io/file path)))
+  (spit path content))
+
+(defn- project-root []
+  (System/getProperty "user.dir"))
+
+(defn- test-isaac-launcher-path []
+  (str (project-root) "/" test-isaac-launcher-script))
+
+(defn -ensure-test-isaac-launcher!
+  "Write target/test-bin/isaac that execs this repo's bb.edn via the resolved bb."
+  []
+  (let [script-path (test-isaac-launcher-path)
+        bb          (-resolve-bb-bin)]
+    (write-text! script-path
+                 (str "#!/usr/bin/env bash\n"
+                      "set -euo pipefail\n"
+                      "ROOT=\"$(cd \"$(dirname \"$0\")/../..\" && pwd)\"\n"
+                      "exec " bb " --config \"$ROOT/bb.edn\" -m isaac.main \"$@\"\n"))
+    (.setExecutable (io/file script-path) true)
+    script-path))
+
+(defn -restore-launcher-command! []
+  (when-let [prior @prior-launcher-command*]
+    (alter-var-root #'dispatch/*launcher-command* (constantly prior))
+    (reset! prior-launcher-command* nil)))
+
+(defn -install-test-isaac-launcher!
+  "Point cli-server dispatch at the test launcher (absolute path). Required on
+   CI where bare `isaac` is not on PATH; local machines with a real isaac bin
+   still prefer the project-local launcher so pins match the checkout."
+  []
+  (let [script-path (-ensure-test-isaac-launcher!)]
+    (when (nil? @prior-launcher-command*)
+      (reset! prior-launcher-command* dispatch/*launcher-command*))
+    (alter-var-root #'dispatch/*launcher-command* (constantly [script-path]))
+    script-path))
 
 (defn- cli-server-sibling-root []
   (let [f (io/file "../isaac-cli-server")]
@@ -109,7 +161,11 @@
 
 (defn remote-cli-ready []
   (ensure-remote-command!)
-  (ensure-cli-server-route!))
+  (ensure-cli-server-route!)
+  ;; Remote `isaac is run with` scenarios spawn cli-server which shells out to
+  ;; `isaac`. Install the project-local launcher so CI (no isaac on PATH) and
+  ;; local checkouts both hit this repo's bb.edn.
+  (-install-test-isaac-launcher!))
 
 (defn- close-quietly! [closeable]
   (when closeable
@@ -132,26 +188,6 @@
 (defn- fixture-root []
   (str (System/getProperty "user.dir") "/target/lcay-fixture-root"))
 
-(defn- write-text! [path content]
-  (.mkdirs (.getParentFile (io/file path)))
-  (spit path content))
-
-(defn- project-root []
-  (System/getProperty "user.dir"))
-
-(defn- test-isaac-launcher-path []
-  (str (project-root) "/" test-isaac-launcher-script))
-
-(defn- ensure-test-isaac-launcher! []
-  (let [script-path (test-isaac-launcher-path)]
-    (write-text! script-path
-                 (str "#!/usr/bin/env bash\n"
-                      "set -euo pipefail\n"
-                      "ROOT=\"$(cd \"$(dirname \"$0\")/../..\" && pwd)\"\n"
-                      "exec /usr/local/bin/bb --config \"$ROOT/bb.edn\" -m isaac.main \"$@\"\n"))
-    (.setExecutable (io/file script-path) true)
-    script-path))
-
 (defn- ensure-acp-fixture-root! []
   (let [root (fixture-root)]
     (delete-tree! root)
@@ -170,7 +206,7 @@
         (str "ws://localhost:" port "/cli"))))
 
 (defn real-cli-server-backed-by-installed-isaac-with-echo-model []
-  (ensure-test-isaac-launcher!)
+  (-install-test-isaac-launcher!)
   (ensure-cli-server-route!)
   (ensure-acp-fixture-root!)
   (g/update! :server-config
@@ -250,12 +286,12 @@
      :lines* lines*
      :future (future (run))}))
 
-(defn- interactive-client-command [argv]
-  (into ["/usr/local/bin/bb" "-e" interactive-client-expr "--"] argv))
+(defn -interactive-client-command [argv]
+  (into [(-resolve-bb-bin) "-e" interactive-client-expr "--"] argv))
 
 (defn- with-test-launcher-path [f]
-  (let [launcher-dir (.getParentFile (io/file (test-isaac-launcher-path)))
-        current-path (or (System/getenv "PATH") "")
+  (let [launcher-dir  (.getParentFile (io/file (test-isaac-launcher-path)))
+        current-path  (or (System/getenv "PATH") "")
         launcher-path (str (.getAbsolutePath launcher-dir) File/pathSeparator current-path)]
     (binding [process/*defaults* (assoc process/*defaults* :extra-env {"PATH" launcher-path})]
       (f))))
@@ -287,14 +323,19 @@
              :stderr
              :exit-code))
 
-(g/after-scenario reset-interactive-state!)
+(defn- after-scenario-cleanup! []
+  (reset-interactive-state!)
+  (-restore-launcher-command!))
+
+(g/after-scenario after-scenario-cleanup!)
 
 (defn isaac-remote-run-interactively [args]
   (reset-interactive-state!)
+  (-install-test-isaac-launcher!)
   (with-test-launcher-path
     (fn []
       (let [argv          (cli-steps/parse-argv (interpolate-interactive-args args))
-            proc          (process/process (interactive-client-command argv)
+            proc          (process/process (-interactive-client-command argv)
                                            {:dir (System/getProperty "user.dir")
                                             :in  :pipe
                                             :out :pipe
