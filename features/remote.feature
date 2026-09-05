@@ -100,7 +100,7 @@ Feature: remote CLI proxy
     A server restart takes 30–60 s. The proxy backs off and keeps trying for
     the reconnect window (default 120 s, ISAAC_REMOTE_RECONNECT_SECS overrides)
     instead of giving up after four sub-second attempts.
-    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is "5"
+    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is set to "5"
     And a stub /cli server that assigns stream-id "s-1" and replies with frames:
       | type   | data   |
       | stdout | first  |
@@ -119,7 +119,7 @@ Feature: remote CLI proxy
 
   @wip
   Scenario: the proxy gives up after the reconnect window (isaac-iskp)
-    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is "1"
+    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is set to "1"
     And a stub /cli server that assigns stream-id "s-1" and replies with frames:
       | type   | data   |
       | stdout | first  |
