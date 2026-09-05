@@ -94,3 +94,93 @@ Feature: remote CLI proxy
     And the stderr contains "reconnecting"
     And the stderr contains "reattached"
     And the exit code is 0
+
+  @wip
+  Scenario: the proxy keeps reconnecting through a 30 s outage (isaac-iskp)
+    A server restart takes 30–60 s. The proxy backs off and keeps trying for
+    the reconnect window (default 120 s, ISAAC_REMOTE_RECONNECT_SECS overrides)
+    instead of giving up after four sub-second attempts.
+    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is "5"
+    And a stub /cli server that assigns stream-id "s-1" and replies with frames:
+      | type   | data   |
+      | stdout | first  |
+    And the stub server drops the connection after sending
+    And the stub server refuses reattach for 6 attempts
+    And the stub server on reattach replays frames:
+      | type   | data   | code |
+      | stdout | second |      |
+      | exit   |        | 0    |
+    When isaac remote is run with "${stub.url} -- sessions list"
+    Then the stdout contains "first"
+    And the stdout contains "second"
+    And the stderr contains "reconnecting (attempt 7)"
+    And the stderr contains "reattached"
+    And the exit code is 0
+
+  @wip
+  Scenario: the proxy gives up after the reconnect window (isaac-iskp)
+    Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is "1"
+    And a stub /cli server that assigns stream-id "s-1" and replies with frames:
+      | type   | data   |
+      | stdout | first  |
+    And the stub server drops the connection after sending
+    And the stub server drops the connection permanently
+    When isaac remote is run with "${stub.url} -- sessions list"
+    Then the stdout contains "first"
+    And the stderr contains "could not reconnect within 1s"
+    And the exit code is 1
+
+  @wip
+  Scenario: an unknown stream after a server restart starts the command fresh (isaac-iskp)
+    After a restart the server has no memory of the stream. The proxy falls
+    back to a new start frame with the same argv instead of exiting.
+    Given a stub /cli server that assigns stream-id "s-1" and replies with frames:
+      | type   | data   |
+      | stdout | first  |
+    And the stub server drops the connection after sending
+    And the stub server answers reattach with an unknown-stream error
+    And the stub server on reattach replays frames:
+      | type   | data   | code |
+      | stdout | fresh  |      |
+      | exit   |        | 0    |
+    When isaac remote is run with "${stub.url} -- sessions list"
+    Then the stub server received frames:
+      | type   | stream-id | argv          |
+      | attach | s-1       |               |
+      | start  |           | sessions list |
+    And the stdout contains "fresh"
+    And the stderr contains "restarted"
+    And the exit code is 0
+
+  @wip
+  Scenario: an acp remote replays initialize and session/load once after a fresh start (isaac-iskp)
+    The proxy remembers the ACP handshake it forwarded and re-drives it after a
+    fresh start, swallowing the duplicate responses so the client sees one of each.
+    Given a stub /cli server that assigns stream-id "s-1" and replies with frames:
+      | type   | data                                 |
+      | stdout | {"jsonrpc":"2.0","id":1,"result":{}} |
+      | stdout | {"jsonrpc":"2.0","id":2,"result":{}} |
+    And the stub server drops the connection after sending
+    And the stub server answers reattach with an unknown-stream error
+    And the stub server on reattach replays frames:
+      | type   | data                                 | code |
+      | stdout | {"jsonrpc":"2.0","id":1,"result":{}} |      |
+      | stdout | {"jsonrpc":"2.0","id":2,"result":{}} |      |
+      | exit   |                                      | 0    |
+    And the stdin lines are:
+      | line                                                                          |
+      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
+      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
+    When isaac remote is run with "${stub.url} -- acp"
+    Then the stub server received frames:
+      | type   | stream-id | argv | stdin                                                                         |
+      | start  |           | acp  |                                                                               |
+      | stdin  |           |      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
+      | stdin  |           |      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
+      | attach | s-1       |      |                                                                               |
+      | start  |           | acp  |                                                                               |
+      | stdin  |           |      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
+      | stdin  |           |      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
+    And the stdout contains "\"id\":1" exactly once
+    And the stdout contains "\"id\":2" exactly once
+    And the exit code is 0
