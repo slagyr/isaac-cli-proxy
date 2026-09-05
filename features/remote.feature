@@ -102,8 +102,8 @@ Feature: remote CLI proxy
     instead of giving up after four sub-second attempts.
     Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is set to "5"
     And a stub /cli server that assigns stream-id "s-1" and replies with frames:
-      | type   | data   |
-      | stdout | first  |
+      | type   | data  |
+      | stdout | first |
     And the stub server drops the connection after sending
     And the stub server refuses reattach for 6 attempts
     And the stub server on reattach replays frames:
@@ -121,10 +121,10 @@ Feature: remote CLI proxy
   Scenario: the proxy gives up after the reconnect window (isaac-iskp)
     Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is set to "1"
     And a stub /cli server that assigns stream-id "s-1" and replies with frames:
-      | type   | data   |
-      | stdout | first  |
+      | type   | data  |
+      | stdout | first |
     And the stub server drops the connection after sending
-    And the stub server drops the connection permanently
+    And the stub server refuses reattach for 99 attempts
     When isaac remote is run with "${stub.url} -- sessions list"
     Then the stdout contains "first"
     And the stderr contains "could not reconnect within 1s"
@@ -132,22 +132,26 @@ Feature: remote CLI proxy
 
   @wip
   Scenario: an unknown stream after a server restart starts the command fresh (isaac-iskp)
-    After a restart the server has no memory of the stream. The proxy falls
-    back to a new start frame with the same argv instead of exiting.
+    After a restart the server has no memory of the stream: it answers the
+    attach with an error frame. The proxy falls back to a new start frame with
+    the same argv instead of exiting. Rows after the error row are the stub's
+    replies to that fresh start.
     Given a stub /cli server that assigns stream-id "s-1" and replies with frames:
-      | type   | data   |
-      | stdout | first  |
+      | type   | data  |
+      | stdout | first |
     And the stub server drops the connection after sending
-    And the stub server answers reattach with an unknown-stream error
     And the stub server on reattach replays frames:
-      | type   | data   | code |
-      | stdout | fresh  |      |
-      | exit   |        | 0    |
+      | type   | data  | code | message            |
+      | error  |       |      | unknown stream s-1 |
+      | stdout | fresh |      |                    |
+      | exit   |       | 0    |                    |
     When isaac remote is run with "${stub.url} -- sessions list"
     Then the stub server received frames:
       | type   | stream-id | argv          |
+      | start  |           | sessions list |
       | attach | s-1       |               |
       | start  |           | sessions list |
+    And the stdout contains "first"
     And the stdout contains "fresh"
     And the stderr contains "restarted"
     And the exit code is 0
@@ -161,26 +165,29 @@ Feature: remote CLI proxy
       | stdout | {"jsonrpc":"2.0","id":1,"result":{}} |
       | stdout | {"jsonrpc":"2.0","id":2,"result":{}} |
     And the stub server drops the connection after sending
-    And the stub server answers reattach with an unknown-stream error
     And the stub server on reattach replays frames:
-      | type   | data                                 | code |
-      | stdout | {"jsonrpc":"2.0","id":1,"result":{}} |      |
-      | stdout | {"jsonrpc":"2.0","id":2,"result":{}} |      |
-      | exit   |                                      | 0    |
-    And the stdin lines are:
-      | line                                                                          |
-      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
-      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
+      | type   | data                                                 | code | message            |
+      | error  |                                                      |      | unknown stream s-1 |
+      | stdout | {"jsonrpc":"2.0","id":1,"result":{"replayed":true}}  |      |                    |
+      | stdout | {"jsonrpc":"2.0","id":2,"result":{"replayed":true}}  |      |                    |
+      | exit   |                                                      | 0    |                    |
+    And stdin is:
+      """
+      {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+      {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}}
+      """
     When isaac remote is run with "${stub.url} -- acp"
     Then the stub server received frames:
-      | type   | stream-id | argv | stdin                                                                         |
-      | start  |           | acp  |                                                                               |
-      | stdin  |           |      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
-      | stdin  |           |      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
-      | attach | s-1       |      |                                                                               |
-      | start  |           | acp  |                                                                               |
-      | stdin  |           |      | {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}                    |
-      | stdin  |           |      | {"jsonrpc":"2.0","id":2,"method":"session/load","params":{"sessionId":"abc"}} |
-    And the stdout contains "\"id\":1" exactly once
-    And the stdout contains "\"id\":2" exactly once
+      | type   | stream-id | argv | data                          |
+      | start  |           | acp  |                               |
+      | stdin  |           |      | #"\"method\":\"initialize\""  |
+      | stdin  |           |      | #"\"method\":\"session/load\"" |
+      | stdin-close |      |      |                               |
+      | attach | s-1       |      |                               |
+      | start  |           | acp  |                               |
+      | stdin  |           |      | #"\"method\":\"initialize\""  |
+      | stdin  |           |      | #"\"sessionId\":\"abc\""      |
+    And the stdout contains "\"id\":1"
+    And the stdout contains "\"id\":2"
+    And the stdout does not contain "replayed"
     And the exit code is 0
