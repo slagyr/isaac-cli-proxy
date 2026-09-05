@@ -6,6 +6,14 @@ Remote CLI client for [Isaac](https://github.com/slagyr/isaac). Implements
 `isaac remote …`: connects to the host `/cli` WebSocket, forwards local argv and
 stdio, and supports reconnect/attach when the socket drops.
 
+On a dropped socket the proxy retries with exponential backoff (0.25 s, 0.5,
+1, 2, 4, then 5 s cap) for 120 s total. Set `ISAAC_REMOTE_RECONNECT_SECS` to
+override the window. Status lines go to stderr only. If the server has
+forgotten the stream (`unknown-stream`), the proxy starts the command again
+with the same argv. When argv begins with `acp`, it also replays the last
+`initialize` and `session/load` handshake so the client session survives a
+server restart.
+
 Pairs with [isaac-cli-server](https://github.com/slagyr/isaac-cli-server).
 Wire protocol: [PROTOCOL.md](PROTOCOL.md) (canonical copy lives on the server
 repo).

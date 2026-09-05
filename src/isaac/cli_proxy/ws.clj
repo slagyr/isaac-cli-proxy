@@ -68,7 +68,7 @@
 (defn loopback-transport []
   (->LoopbackTransport (LinkedBlockingQueue.) (LinkedBlockingQueue.) (atom nil) (atom nil) (atom nil)))
 
-(defrecord ReconnectableTransport [accept-queue connected-queue active-client active-server dropped? permanent? captured-headers])
+(defrecord ReconnectableTransport [accept-queue connected-queue active-client active-server dropped? permanent? captured-headers refuse-remaining connect-count])
 
 (defn reconnectable-transport []
   (->ReconnectableTransport (LinkedBlockingQueue.)
@@ -77,7 +77,9 @@
                             (atom nil)
                             (atom false)
                             (atom false)
-                            (atom nil)))
+                            (atom nil)
+                            (atom 0)
+                            (atom 0)))
 
 (defn connect-loopback!
   ([transport url]
@@ -89,12 +91,18 @@
      (when @(:permanent? transport)
        (throw (ex-info "loopback unavailable" {:type :loopback/unavailable})))
      (when @(:dropped? transport)
-       (throw (ex-info "loopback dropped" {:type :loopback/dropped}))))
+       (throw (ex-info "loopback dropped" {:type :loopback/dropped})))
+     (when (and (pos? @(:connect-count transport))
+                (pos? @(:refuse-remaining transport)))
+       (swap! (:refuse-remaining transport) dec)
+       (throw (ex-info "loopback refused" {:type :loopback/refused}))))
    (let [{:keys [client server]} (loopback-pair)]
      (reset! (:active-client transport) client)
      (reset! (:active-server transport) server)
      (.put ^LinkedBlockingQueue (:accept-queue transport) server)
      (.put ^LinkedBlockingQueue (:connected-queue transport) server)
+     (when (instance? ReconnectableTransport transport)
+       (swap! (:connect-count transport) inc))
      client)))
 
 (defn accept-loopback! [transport]
@@ -121,6 +129,13 @@
   (reset! (:active-client transport) nil)
   (reset! (:active-server transport) nil)
   (drain-queue! (:connected-queue transport))
+  nil)
+
+(defn refuse-reconnects!
+  "Reject the next `n` connects after the first successful one, then accept again."
+  [transport n]
+  (when (instance? ReconnectableTransport transport)
+    (reset! (:refuse-remaining transport) n))
   nil)
 
 (defn drop-loopback-permanently! [transport]

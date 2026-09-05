@@ -161,7 +161,7 @@
     (let [transport (ws/loopback-transport)
           out*      (java.io.StringWriter.)
           err*      (java.io.StringWriter.)]
-      (binding [*out* out* *err* err*]
+      (binding [*out* out* *err* err* sut/*sleep-fn* (fn [_ms])]
         (future
           (let [server-1 (ws/accept-loopback! transport)]
             (should= {:type "start" :argv ["sessions" "list"]}
@@ -182,4 +182,44 @@
           (should= 0 code)
           (should= "firstsecond" (.toString out*))
           (should (re-find #"reconnecting" (.toString err*)))
-          (should (re-find #"reattached" (.toString err*))))))))
+          (should (re-find #"reattached" (.toString err*)))))))
+
+  (it "backs off 250ms, 500ms, 1s, 2s, 4s, then caps at 5s"
+    (should= 250 (sut/-next-delay-ms 1))
+    (should= 500 (sut/-next-delay-ms 2))
+    (should= 1000 (sut/-next-delay-ms 3))
+    (should= 2000 (sut/-next-delay-ms 4))
+    (should= 4000 (sut/-next-delay-ms 5))
+    (should= 5000 (sut/-next-delay-ms 6))
+    (should= 5000 (sut/-next-delay-ms 7)))
+
+  (it "starts the command fresh when attach reports an unknown stream"
+    (let [transport (ws/loopback-transport)
+          out*      (java.io.StringWriter.)
+          err*      (java.io.StringWriter.)]
+      (binding [*out* out* *err* err* sut/*sleep-fn* (fn [_ms])]
+        (future
+          (let [server-1 (ws/accept-loopback! transport)]
+            (should= "start" (:type (protocol/parse-frame (ws/ws-receive! server-1))))
+            (send-frames! server-1 [{:type "start-ack" :stream-id "s-1"}
+                                    {:type "stdout" :data (protocol/b64-encode "first")}])
+            (ws/ws-close! server-1)
+            (let [server-2 (ws/accept-loopback! transport)]
+              (should= {:type "attach" :stream-id "s-1"}
+                       (protocol/parse-frame (ws/ws-receive! server-2)))
+              (send-frames! server-2 [{:type "error" :message "unknown stream s-1"}])
+              (let [server-3 (ws/accept-loopback! transport)]
+                (should= {:type "start" :argv ["sessions" "list"]}
+                         (protocol/parse-frame (ws/ws-receive! server-3)))
+                (send-frames! server-3 [{:type "start-ack" :stream-id "s-2"}
+                                        {:type "stdout" :data (protocol/b64-encode "fresh")}
+                                        {:type "exit" :code 0}])))))
+        (let [code (empty-stdin-binding
+                     (fn []
+                       (sut/run-proxy! {:url                "ws://stub/cli"
+                                        :argv               ["sessions" "list"]
+                                        :connection-factory #(ws/connect-loopback! transport %1 %2)})))]
+          (should= 0 code)
+          (should= "firstfresh" (.toString out*))
+          (should (re-find #"restarted" (.toString err*)))))))
+  )

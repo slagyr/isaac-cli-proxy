@@ -95,7 +95,6 @@ Feature: remote CLI proxy
     And the stderr contains "reattached"
     And the exit code is 0
 
-  @wip
   Scenario: the proxy keeps reconnecting through a 30 s outage (isaac-iskp)
     A server restart takes 30–60 s. The proxy backs off and keeps trying for
     the reconnect window (default 120 s, ISAAC_REMOTE_RECONNECT_SECS overrides)
@@ -117,7 +116,6 @@ Feature: remote CLI proxy
     And the stderr contains "reattached"
     And the exit code is 0
 
-  @wip
   Scenario: the proxy gives up after the reconnect window (isaac-iskp)
     Given the env var "ISAAC_REMOTE_RECONNECT_SECS" is set to "1"
     And a stub /cli server that assigns stream-id "s-1" and replies with frames:
@@ -130,7 +128,6 @@ Feature: remote CLI proxy
     And the stderr contains "could not reconnect within 1s"
     And the exit code is 1
 
-  @wip
   Scenario: an unknown stream after a server restart starts the command fresh (isaac-iskp)
     After a restart the server has no memory of the stream: it answers the
     attach with an error frame. The proxy falls back to a new start frame with
@@ -156,7 +153,6 @@ Feature: remote CLI proxy
     And the stderr contains "restarted"
     And the exit code is 0
 
-  @wip
   Scenario: an acp remote replays initialize and session/load once after a fresh start (isaac-iskp)
     The proxy remembers the ACP handshake it forwarded and re-drives it after a
     fresh start, swallowing the duplicate responses so the client sees one of each.

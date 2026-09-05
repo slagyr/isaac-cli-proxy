@@ -6,7 +6,7 @@
     [isaac.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
     [isaac.cli-proxy.protocol :as protocol]
-    [isaac.cli-proxy.proxy]
+    [isaac.cli-proxy.proxy :as proxy]
     [isaac.cli-proxy.ws :as ws]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.spec-helper :as helper]
@@ -26,6 +26,7 @@
   (g/dissoc! :stub-defer-replies? :stub-drop-after-send? :stub-initial-reply-frames
              :stub-reattach-reply-frames :stub-received-frames :stub-session-runner
              :stub-stream-id :stub-transport :stub-url :stub-connect-headers
+             :stub-fresh-start-reply-frames :stub-drop-after-stdin-close?
              :main-extra-opts :stdin-content))
 
 (g/after-scenario reset-stub-state!)
@@ -45,7 +46,10 @@
     (assoc :stdout-tty (= "true" (:stdout-tty row)))
 
     (and (contains? row :stream-id) (not (str/blank? (:stream-id row))))
-    (assoc :stream-id (:stream-id row))))
+    (assoc :stream-id (:stream-id row))
+
+    (and (contains? row :message) (not (str/blank? (:message row))))
+    (assoc :message (:message row))))
 
 (defn- parse-reply-table [table]
   (let [headers (mapv (comp keyword str) (:headers table))]
@@ -57,7 +61,7 @@
 
 (defn- decode-received-frame [frame]
   (cond-> frame
-    (:data frame) (update :data protocol/b64-decode)
+    (:data frame) (update :data (comp str/trim-newline protocol/b64-decode))
     (contains? frame :argv) (update :argv argv->matcher-str)))
 
 (defn- frames-for-matching []
@@ -70,8 +74,18 @@
 
 (defn- maybe-close-after-send! [server]
   (when (g/get :stub-drop-after-send?)
-    (g/assoc! :stub-drop-after-send? false)
-    (ws/ws-close! server)))
+    (if (seq (g/get :stdin-content))
+      (g/assoc! :stub-drop-after-stdin-close? true)
+      (do
+        (g/assoc! :stub-drop-after-send? false)
+        (ws/ws-close! server)))))
+
+(defn- split-error-tail [frames]
+  (let [frames (vec frames)
+        idx    (first (keep-indexed (fn [i f] (when (= "error" (:type f)) i)) frames))]
+    (if idx
+      [(subvec frames 0 (inc idx)) (subvec frames (inc idx))]
+      [frames []])))
 
 (defn- handle-stub-session! [server]
   (loop []
@@ -82,16 +96,29 @@
           "start"
           (do
             (send-reply-frames! server [{:type "start-ack" :stream-id (g/get :stub-stream-id)}])
-            (when-not (g/get :stub-defer-replies?)
-              (send-reply-frames! server (g/get :stub-initial-reply-frames))
-              (maybe-close-after-send! server)))
+            (if-let [fresh (g/get :stub-fresh-start-reply-frames)]
+              (do
+                (g/dissoc! :stub-fresh-start-reply-frames)
+                (send-reply-frames! server fresh))
+              (when-not (g/get :stub-defer-replies?)
+                (send-reply-frames! server (g/get :stub-initial-reply-frames))
+                (maybe-close-after-send! server))))
 
           "attach"
-          (send-reply-frames! server (g/get :stub-reattach-reply-frames))
+          (let [frames (vec (or (g/get :stub-reattach-reply-frames) []))
+                [head tail] (split-error-tail frames)]
+            (send-reply-frames! server head)
+            (when (seq tail)
+              (g/assoc! :stub-fresh-start-reply-frames tail)))
 
           "stdin-close"
-          (when (g/get :stub-defer-replies?)
-            (send-reply-frames! server (g/get :stub-initial-reply-frames)))
+          (do
+            (when (g/get :stub-defer-replies?)
+              (send-reply-frames! server (g/get :stub-initial-reply-frames)))
+            (when (g/get :stub-drop-after-stdin-close?)
+              (g/assoc! :stub-drop-after-send? false)
+              (g/dissoc! :stub-drop-after-stdin-close?)
+              (ws/ws-close! server)))
 
           nil)
         (recur)))))
@@ -136,6 +163,9 @@
   (let [rows (parse-reply-table table)]
     (g/assoc! :stub-reattach-reply-frames (mapv encode-outgoing-frame rows))))
 
+(defn stub-server-refuses-reattach [n]
+  (ws/refuse-reconnects! (g/get :stub-transport) n))
+
 (defn- interpolate-remote-args [args]
   (-> args
       (str/replace "${stub.url}" (or (g/get :stub-url) stub-url))
@@ -146,11 +176,14 @@
         extra-opts    (or (g/get :main-extra-opts) {})
         stdin-content (or (g/get :stdin-content) "")
         out-w         (java.io.StringWriter.)
-        err-w         (java.io.StringWriter.)]
+        err-w         (java.io.StringWriter.)
+        now*          (atom 0)]
     (binding [*out* out-w
               *err* err-w
               *in*  (java.io.BufferedReader. (StringReader. stdin-content))
-              isaac.cli-proxy.proxy/*stdout-tty?* (constantly true)]
+              proxy/*stdout-tty?* (constantly true)
+              proxy/*now-ms* (fn [] @now*)
+              proxy/*sleep-fn* (fn [ms] (swap! now* + (min (long ms) 100)) nil)]
       (g/assoc! :exit-code
                 (remote-cli/run-fn (merge extra-opts {:_raw-args argv}))))
     (g/assoc! :output (str out-w))
@@ -164,11 +197,45 @@
     table
     {:headers (into ["#index"] (:headers table))
      :rows    (mapv (fn [idx row] (into [(str idx)] row))
-                    (range)
-                    (:rows table))}))
+                     (range)
+                     (:rows table))}))
+
+(defn- normalize-argv-cell [cell]
+  (cond
+    (or (str/blank? cell)
+        (str/starts-with? cell "[")
+        (str/starts-with? cell "#"))
+    cell
+
+    :else
+    (argv->matcher-str (vec (str/split cell #"\s+")))))
+
+(defn- strip-regex-newline [cell]
+  (if (and (string? cell) (str/starts-with? cell "#\"") (str/ends-with? cell "\""))
+    (let [pattern (-> (subs cell 2 (dec (count cell)))
+                      (str/replace "\\n" ""))]
+      (str "#\".*" pattern ".*\""))
+    cell))
+
+(defn- normalize-argv-table [table]
+  (let [headers  (:headers table)
+        argv-idx (.indexOf headers "argv")
+        data-idx (.indexOf headers "data")]
+    (cond-> table
+      (not (neg? argv-idx))
+      (update :rows (fn [rows]
+                      (mapv (fn [row]
+                              (update (vec row) argv-idx normalize-argv-cell))
+                            rows)))
+      (not (neg? data-idx))
+      (update :rows (fn [rows]
+                      (mapv (fn [row]
+                              (update (vec row) data-idx strip-regex-newline))
+                            rows))))))
 
 (defn- received-frame-result [table]
-  (let [expected-types (->> (:rows table) (map first) set)
+  (let [table          (normalize-argv-table table)
+        expected-types (->> (:rows table) (map first) set)
         entries        (->> (frames-for-matching)
                             (filter (partial frame-type-expected? expected-types))
                             vec)
@@ -188,6 +255,7 @@
 (defgiven "the stub server drops the connection after sending" isaac.cli-proxy.cli-proxy-steps/stub-server-drops-after-sending)
 (defgiven "the stub server on reattach replays frames:" isaac.cli-proxy.cli-proxy-steps/stub-server-reattach-replies)
 (defgiven "the stub defers replies until stdin-close" isaac.cli-proxy.cli-proxy-steps/stub-defer-replies)
+(defgiven "the stub server refuses reattach for {n:int} attempts" isaac.cli-proxy.cli-proxy-steps/stub-server-refuses-reattach)
 
 (defwhen "isaac remote is run with {args:string}" isaac.cli-proxy.cli-proxy-steps/isaac-remote-run)
 
