@@ -16,7 +16,7 @@
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.fs :as fs]
     [isaac.nexus :as nexus]
-    [isaac.server.server-steps :as server-steps]
+    [isaac.http.server-steps :as server-steps]
     [isaac.util.jsonrpc :as jrpc])
   (:import
     (java.io BufferedReader File InputStreamReader OutputStreamWriter)

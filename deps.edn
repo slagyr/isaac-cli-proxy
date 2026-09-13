@@ -18,9 +18,9 @@
                               io.github.slagyr/isaac-foundation-spec         {:local/root "../isaac-foundation/spec"}
                               io.github.slagyr/isaac-agent                   {:local/root "../isaac-agent"}
                               io.github.slagyr/isaac-agent-spec              {:local/root "../isaac-agent/spec"}
-                              io.github.slagyr/isaac-server                  {:local/root "../isaac-server"}
-                              io.github.slagyr/isaac-server-spec             {:local/root "../isaac-server/spec"}
-                              io.github.slagyr/isaac-server-test-support     {:local/root "../isaac-server/spec-support"}
+                              io.github.slagyr/isaac-http                  {:local/root "../isaac-http"}
+                              io.github.slagyr/isaac-http-spec             {:local/root "../isaac-http/spec"}
+                              io.github.slagyr/isaac-http-test-support     {:local/root "../isaac-http/spec-support"}
                               io.github.slagyr/isaac-cli-server              {:local/root "../isaac-cli-server"}
                               marigold.bridge/marigold.bridge                {:local/root "../isaac-foundation/modules/marigold.bridge"}
                               marigold.longwave/marigold.longwave            {:local/root "../isaac-foundation/modules/marigold.longwave"}}}
@@ -42,12 +42,12 @@
                             io.github.slagyr/isaac-agent-spec              {:git/url "https://github.com/slagyr/isaac-agent.git"
                                                                           :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"
                                                                           :deps/root "spec"}
-                            io.github.slagyr/isaac-server                  {:git/url "https://github.com/slagyr/isaac-server.git"
+                            io.github.slagyr/isaac-http                  {:git/url "https://github.com/slagyr/isaac-http.git"
                                                                           :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"}
-                            io.github.slagyr/isaac-server-spec             {:git/url "https://github.com/slagyr/isaac-server.git"
+                            io.github.slagyr/isaac-http-spec             {:git/url "https://github.com/slagyr/isaac-http.git"
                                                                           :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
                                                                           :deps/root "spec"}
-                            io.github.slagyr/isaac-server-test-support   {:git/url "https://github.com/slagyr/isaac-server.git"
+                            io.github.slagyr/isaac-http-test-support   {:git/url "https://github.com/slagyr/isaac-http.git"
                                                                           :git/sha "2fb78f44a2dfed5159713089b506eb9d3ee587da"
                                                                           :deps/root "spec-support"}
                             io.github.slagyr/isaac-cli-server              {:git/url "https://github.com/slagyr/isaac-cli-server.git"
