@@ -18,12 +18,12 @@
                                                           :git/sha "153baa684c42c43bda46d5975e6f7f973a533568"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-http                    {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"}
+                                                          :git/sha "d60ff8bd796132fee0bccd0ca6a8c6f4f74691f4"}
          io.github.slagyr/isaac-http-spec               {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"
+                                                          :git/sha "d60ff8bd796132fee0bccd0ca6a8c6f4f74691f4"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-http-test-support       {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                          :git/sha "dfa8767a440fc4c8b8bc6877ffd58ae20d028367"
+                                                          :git/sha "d60ff8bd796132fee0bccd0ca6a8c6f4f74691f4"
                                                           :deps/root "spec-support"}
          io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
                                                           :git/sha "8f42058034dfd9c5b3582d2edf27f75618f81992"}
