@@ -61,8 +61,7 @@
 
 (defn- decode-received-frame [frame]
   (cond-> frame
-    (:data frame) (update :data (comp str/trim-newline protocol/b64-decode))
-    (contains? frame :argv) (update :argv argv->matcher-str)))
+    (:data frame) (update :data (comp str/trim-newline protocol/b64-decode))))
 
 (defn- frames-for-matching []
   (->> (g/get :stub-received-frames)
