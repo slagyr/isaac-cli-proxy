@@ -98,13 +98,7 @@
     script-path))
 
 (defn- cli-server-sibling-root []
-  (let [f        (io/file "../isaac-cli-server")
-        manifest (io/file f "src/isaac-manifest.edn")]
-    (when (and (.exists manifest)
-               (= :isaac.http/route
-                  (some-> manifest slurp edn/read-string keys set
-                          (get :isaac.http/route))))
-      (.getAbsolutePath f))))
+  nil)
 
 (defn- cli-server-manifest-from-url [url]
   (some-> url io/reader slurp edn/read-string))
