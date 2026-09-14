@@ -28,7 +28,7 @@
 
 (def ^:private cli-server-git-coord
   {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-   :git/sha "8f42058034dfd9c5b3582d2edf27f75618f81992"})
+   :git/sha "ae0743a566063ed87dce26c31783a37bbab9cbee"})
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
