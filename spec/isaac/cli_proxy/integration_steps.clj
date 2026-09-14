@@ -15,6 +15,7 @@
     [isaac.cli-server.dispatch :as dispatch]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.fs :as fs]
+    [isaac.logger :as log]
     [isaac.nexus :as nexus]
     [isaac.http.server-steps :as server-steps]
     [isaac.util.jsonrpc :as jrpc])
@@ -32,7 +33,7 @@
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
-   :git/sha "3b48d9777567e2621b21361e404fc336350c8993"})
+   :git/sha "738fe6b67806b41b59a951e06f1a7e5d8b9823a1"})
 
 (def ^:private interactive-timeout-ms 15000)
 (def ^:private interactive-eof ::interactive-eof)
@@ -157,8 +158,12 @@
                             merge (cli-server-module-index manifest))))
     (persist-cli-server-module!)))
 
+(defn- log-with-feature-source [original-log* level event file line & kvs]
+  (apply original-log* level event (or file "spec/isaac/cli_proxy/integration_steps.clj") line kvs))
+
 (defn remote-cli-ready []
   (ensure-remote-command!)
+  (alter-var-root #'log/log* #(partial log-with-feature-source %))
   (ensure-cli-server-route!)
   ;; Remote `isaac is run with` scenarios spawn cli-server which shells out to
   ;; `isaac`. Install the project-local launcher so CI (no isaac on PATH) and
