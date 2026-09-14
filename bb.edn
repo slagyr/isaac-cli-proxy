@@ -26,7 +26,7 @@
                                                           :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"
                                                           :deps/root "spec-support"}
          io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-                                                          :git/sha "8f42058034dfd9c5b3582d2edf27f75618f81992"}
+                                                          :git/sha "ae0743a566063ed87dce26c31783a37bbab9cbee"}
          marigold.bridge/marigold.bridge                  {:git/url "https://github.com/slagyr/isaac-foundation.git"
                                                           :git/sha "ad0a97b7f039814dc92916299baf3c07a5b86f3a"
                                                           :deps/root "modules/marigold.bridge"}
