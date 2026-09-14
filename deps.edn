@@ -38,9 +38,9 @@
 
   :features  {:alias :test
               :extra-deps  {io.github.slagyr/isaac-agent                 {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                                        :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"}
+                                                                        :git/sha "104b3c4a9c62cff62607a28d3c60da5038688d9f"}
                             io.github.slagyr/isaac-agent-spec              {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                                          :git/sha "4abb96bca71a95d953b15e05a2736e4f2e4a61f9"
+                                                                          :git/sha "104b3c4a9c62cff62607a28d3c60da5038688d9f"
                                                                           :deps/root "spec"}
                             io.github.slagyr/isaac-http                  {:git/url "https://github.com/slagyr/isaac-http.git"
                                                                           :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"}
