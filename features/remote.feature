@@ -72,6 +72,125 @@ Feature: remote CLI proxy
     When isaac remote is run with "${stub.url} --token my-secret -- version"
     Then the stub connection authorization is "Bearer my-secret"
     And the exit code is 0
+
+  # --- isaac-tvcg: authenticate without the token in argv ---------------------
+
+  @wip
+  Scenario: --token still authenticates but warns that it exposes the secret (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    When isaac remote is run with "${stub.url} --token my-secret -- version"
+    Then the stub connection authorization is "Bearer my-secret"
+    And the stderr contains "--token exposes the secret in the process list"
+    And the stderr contains "--token-file"
+    And the stderr does not contain "my-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: a private token file supplies the bearer credential (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And a file "${tmp}/token" with mode "600" containing "file-secret"
+    When isaac remote is run with "${stub.url} --token-file ${tmp}/token -- version"
+    Then the stub connection authorization is "Bearer file-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: a group- or world-readable token file is refused before connecting (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And a file "${tmp}/token" with mode "644" containing "file-secret"
+    When isaac remote is run with "${stub.url} --token-file ${tmp}/token -- version"
+    Then the stderr contains "chmod 600"
+    And the stderr does not contain "file-secret"
+    And the stub server received no connection
+    And the exit code is 1
+
+  @wip
+  Scenario: a named environment variable supplies the bearer credential (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And environment variable "MY_TOK" is "env-secret"
+    When isaac remote is run with "${stub.url} --token-env MY_TOK -- version"
+    Then the stub connection authorization is "Bearer env-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: an unset named environment variable is an error naming the variable (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    When isaac remote is run with "${stub.url} --token-env NOPE_TOK -- version"
+    Then the stderr contains "NOPE_TOK"
+    And the stub server received no connection
+    And the exit code is 1
+
+  @wip
+  Scenario: ISAAC_REMOTE_TOKEN supplies the bearer credential with no flag (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And environment variable "ISAAC_REMOTE_TOKEN" is "default-secret"
+    When isaac remote is run with "${stub.url} -- version"
+    Then the stub connection authorization is "Bearer default-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: the home config's remote token is used when the url matches (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And environment variable "ZANE_TOK" is "pointer-secret"
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remote {:url "${stub.url}" :token "${ZANE_TOK}"}}}
+      """
+    When isaac remote is run with "${stub.url} -- version"
+    Then the stub connection authorization is "Bearer pointer-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: a literal token in a readable home config is refused (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remote {:url "${stub.url}" :token "literal-secret"}}}
+      """
+    When isaac remote is run with "${stub.url} -- version"
+    Then the stderr contains "chmod 600"
+    And the stderr does not contain "literal-secret"
+    And the stub server received no connection
+    And the exit code is 1
+
+  @wip
+  Scenario: the home config's token is ignored for a different url (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And the home config file with mode "600" contains:
+      """
+      {:cli {:remote {:url "wss://elsewhere.example/cli" :token "other-secret"}}}
+      """
+    When isaac remote is run with "${stub.url} -- version"
+    Then the stub connection has no authorization
+    And the exit code is 0
+
+  @wip
+  Scenario: an explicit token file beats ISAAC_REMOTE_TOKEN (isaac-tvcg)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And environment variable "ISAAC_REMOTE_TOKEN" is "default-secret"
+    And a file "${tmp}/token" with mode "600" containing "file-secret"
+    When isaac remote is run with "${stub.url} --token-file ${tmp}/token -- version"
+    Then the stub connection authorization is "Bearer file-secret"
+    And the exit code is 0
   Scenario: the proxy reattaches after a socket drop and replayed frames render once (isaac-4tn1)
     On a dropped socket the proxy keeps local stdio open, emits status to
     stderr (never stdout), reattaches with the stream-id, and renders replayed
