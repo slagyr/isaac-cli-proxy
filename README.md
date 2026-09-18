@@ -14,6 +14,17 @@ with the same argv. When argv begins with `acp`, it also replays the last
 `initialize` and `session/load` handshake so the client session survives a
 server restart.
 
+## Authentication
+
+Remote bearer credentials resolve in this order:
+
+1. `--token-file PATH` (the file must be mode 600 or otherwise inaccessible to group/world)
+2. `--token-env VAR`
+3. `ISAAC_REMOTE_TOKEN`
+4. `~/.config/isaac.edn` at `{:cli {:remote {:url "…" :token "…"}}}`
+
+Home-config `${VAR}` tokens read that environment variable. Literal home-config tokens require the pointer file to be mode 600. The older `--token TOKEN` option still works but is deprecated because argv exposes secrets through process listings and shell history.
+
 Pairs with [isaac-cli-server](https://github.com/slagyr/isaac-cli-server).
 Wire protocol: [PROTOCOL.md](PROTOCOL.md) (canonical copy lives on the server
 repo).

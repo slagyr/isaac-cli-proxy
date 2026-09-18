@@ -9,6 +9,8 @@
     (should= {:url         "ws://host/cli"
               :remote-argv ["version" "--help"]
               :token       "tok"
+              :token-file  nil
+              :token-env   nil
               :help        nil
               :errors      []}
              (#'sut/parse-remote-opts ["ws://host/cli" "--token" "tok" "--" "version" "--help"])))
@@ -17,6 +19,8 @@
     (should= {:url         "ws://host/cli"
               :remote-argv []
               :token       nil
+              :token-file  nil
+              :token-env   nil
               :help        nil
               :errors      []}
              (#'sut/parse-remote-opts ["ws://host/cli"])))
@@ -25,6 +29,8 @@
     (should= {:url         "ws://host/cli"
               :remote-argv []
               :token       nil
+              :token-file  nil
+              :token-env   nil
               :help        true
               :errors      []}
              (#'sut/parse-remote-opts ["ws://host/cli" "--help"]))))

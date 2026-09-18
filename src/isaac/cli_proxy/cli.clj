@@ -12,10 +12,13 @@
     [isaac.cli.api :as cli-api]
     [isaac.cli.registry :as registry]
     [isaac.cli-proxy.proxy :as proxy]
+    [isaac.cli-proxy.token :as token]
     [isaac.config.cli.common :as cli-common]))
 
 (def option-spec
-  [[nil "--token TOKEN" "Bearer token for remote authentication"]
+  [[nil "--token TOKEN" "Deprecated: bearer token in argv (use a secure source below)"]
+   [nil "--token-file PATH" "Read bearer token from a mode-600 file"]
+   [nil "--token-env VAR" "Read bearer token from the named environment variable"]
    ["-h" "--help" "Show help"]])
 
 (defmethod cli-api/option-spec :remote [_id]
@@ -29,10 +32,18 @@
       :else         (assoc :url (first arguments)
                            :remote-argv (vec (rest arguments))
                            :token (:token options)
+                           :token-file (:token-file options)
+                           :token-env (:token-env options)
                            :help (:help options)))))
 
+(defn- warn-deprecated-token! []
+  (binding [*out* *err*]
+    (println "isaac remote: --token exposes the secret in the process list; use --token-file, --token-env, or ISAAC_REMOTE_TOKEN")))
+
 (defn run [opts]
-  (let [{:keys [url remote-argv token help errors]} (parse-remote-opts (:_raw-args opts))]
+  (let [{:keys [url remote-argv token token-file token-env help errors]}
+        (parse-remote-opts (:_raw-args opts))
+        resolve-token (or (:token-resolver opts) token/resolve-system-token)]
     (cond
       help
       (do (println (registry/command-help (registry/get-command "remote"))) 0)
@@ -44,10 +55,25 @@
       (cli-common/print-cli-error! "remote: missing WebSocket URL")
 
       :else
-      (proxy/run-proxy! {:url           url
-                   :argv          remote-argv
-                   :token         token
-                   :connection-factory (:connection-factory opts)}))))
+      (let [resolved (when-not token
+                       (resolve-token {:url url :token-file token-file :token-env token-env}))]
+        (cond
+          token
+          (do
+            (warn-deprecated-token!)
+            (proxy/run-proxy! {:url url :argv remote-argv :token token
+                               :connection-factory (:connection-factory opts)}))
+
+          (:error resolved)
+          (cli-common/print-cli-error! (:error resolved))
+
+          :else
+          (do
+            (when-not (:token resolved)
+              (binding [*out* *err*]
+                (println "isaac remote: no bearer token resolved; tried --token-file, --token-env, ISAAC_REMOTE_TOKEN, and ~/.config/isaac.edn")))
+            (proxy/run-proxy! {:url url :argv remote-argv :token (:token resolved)
+                               :connection-factory (:connection-factory opts)})))))))
 
 (defn run-fn [opts]
   (run opts))

@@ -1,10 +1,14 @@
 (ns isaac.cli-proxy.cli-proxy-steps
   (:require
+    [c3kit.apron.env :as c3env]
     [clojure.edn :as edn]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
     [isaac.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
+    [isaac.cli-proxy.token :as token]
+    [isaac.config.env :as config-env]
+    [isaac.config.root]
     [isaac.cli-proxy.protocol :as protocol]
     [isaac.cli-proxy.proxy :as proxy]
     [isaac.cli-proxy.ws :as ws]
@@ -12,7 +16,9 @@
     [isaac.spec-helper :as helper]
     [isaac.step-tables :as match])
   (:import
-    (java.io StringReader)))
+    (java.io StringReader)
+    (java.nio.file Files)
+    (java.nio.file.attribute PosixFilePermission)))
 
 (helper! isaac.cli-proxy.cli-proxy-steps)
 
@@ -23,11 +29,14 @@
 (defn- reset-stub-state! []
   (when-let [runner (g/get :stub-session-runner)]
     (future-cancel runner))
+  (config-env/clear-env-overrides!)
+  (reset! c3env/-overrides {})
   (g/dissoc! :stub-defer-replies? :stub-drop-after-send? :stub-initial-reply-frames
              :stub-reattach-reply-frames :stub-received-frames :stub-session-runner
              :stub-stream-id :stub-transport :stub-url :stub-connect-headers
              :stub-fresh-start-reply-frames :stub-drop-after-stdin-close?
-             :main-extra-opts :stdin-content))
+             :main-extra-opts :stdin-content :stub-connect-count :tmp-dir
+             :remote-home-config :remote-home-config-mode))
 
 (g/after-scenario reset-stub-state!)
 
@@ -124,6 +133,7 @@
         (recur)))))
 
 (defn- stub-connect! [_url {:keys [headers]}]
+  (g/update! :stub-connect-count (fnil inc 0))
   (when headers
     (g/assoc! :stub-connect-headers headers))
   (let [transport (or (g/get :stub-transport)
@@ -142,6 +152,7 @@
   (let [rows    (parse-reply-table table)
         replies (mapv encode-outgoing-frame rows)]
     (g/assoc! :stub-url stub-url)
+    (g/assoc! :stub-connect-count 0)
     (g/assoc! :stub-stream-id nil)
     (g/assoc! :stub-initial-reply-frames replies)
     (g/assoc! :stub-reattach-reply-frames [])
@@ -166,10 +177,22 @@
 (defn stub-server-refuses-reattach [n]
   (ws/refuse-reconnects! (g/get :stub-transport) n))
 
-(defn- interpolate-remote-args [args]
-  (-> args
+(defn- tmp-dir []
+  (or (g/get :tmp-dir)
+      (let [dir (str (Files/createTempDirectory "isaac-cli-proxy-" (make-array java.nio.file.attribute.FileAttribute 0)))]
+        (g/assoc! :tmp-dir dir)
+        dir)))
+
+(defn- interpolate [text]
+  (-> text
       (str/replace "${stub.url}" (or (g/get :stub-url) stub-url))
-      (str/replace "\\\"" "\"")))
+      (str/replace "${tmp}" (tmp-dir))))
+
+(defn- interpolate-remote-args [args]
+  (-> args interpolate (str/replace "\\\"" "\"")))
+
+(defn- feature-env [name]
+  (or (config-env/env name) (c3env/env name)))
 
 (defn isaac-remote-run [args]
   (let [argv          (cli-steps/parse-argv (interpolate-remote-args args))
@@ -180,12 +203,21 @@
         now*          (atom 0)]
     (binding [*out* out-w
               *err* err-w
+              isaac.config.root/*user-home* (tmp-dir)
               *in*  (java.io.BufferedReader. (StringReader. stdin-content))
               proxy/*stdout-tty?* (constantly true)
               proxy/*now-ms* (fn [] @now*)
               proxy/*sleep-fn* (fn [ms] (swap! now* + (min (long ms) 100)) nil)]
-      (g/assoc! :exit-code
-                (remote-cli/run-fn (merge extra-opts {:_raw-args argv}))))
+      (let [resolver #(token/resolve-token (assoc %
+                                             :env (into {}
+                                                        (map (fn [name]
+                                                               [name (or (config-env/env name) (c3env/env name))]))
+                                                        (remove nil? [token/DEFAULT_ENV (:token-env %)]))
+                                             :env-fn feature-env
+                                             :home-config (g/get :remote-home-config)
+                                             :home-config-mode (g/get :remote-home-config-mode)))]
+        (g/assoc! :exit-code
+                  (remote-cli/run-fn (merge extra-opts {:_raw-args argv :token-resolver resolver})))))
     (g/assoc! :output (str out-w))
     (g/assoc! :stderr (str err-w))))
 
@@ -249,6 +281,42 @@
 (defn stub-connection-authorization [expected]
   (g/should= expected (get (g/get :stub-connect-headers) "Authorization")))
 
+(defn- parse-mode [mode]
+  (Integer/parseInt mode 8))
+
+(defn- permissions [mode]
+  (let [mode (parse-mode mode)]
+    (into #{}
+          (keep (fn [[bit permission]] (when (pos? (bit-and mode bit)) permission)))
+          [[0400 PosixFilePermission/OWNER_READ]
+           [0200 PosixFilePermission/OWNER_WRITE]
+           [0100 PosixFilePermission/OWNER_EXECUTE]
+           [0040 PosixFilePermission/GROUP_READ]
+           [0020 PosixFilePermission/GROUP_WRITE]
+           [0010 PosixFilePermission/GROUP_EXECUTE]
+           [0004 PosixFilePermission/OTHERS_READ]
+           [0002 PosixFilePermission/OTHERS_WRITE]
+           [0001 PosixFilePermission/OTHERS_EXECUTE]])))
+
+(defn file-with-mode [path mode content]
+  (let [path (interpolate path)
+        file (java.io.File. path)]
+    (.mkdirs (.getParentFile file))
+    (spit file content)
+    (Files/setPosixFilePermissions (.toPath file) (permissions mode))))
+
+(defn home-config-with-mode [mode content]
+  (let [content (interpolate content)]
+    (file-with-mode (str (tmp-dir) "/.config/isaac.edn") mode content)
+    (g/assoc! :remote-home-config (get-in (edn/read-string content) [:cli :remote]))
+    (g/assoc! :remote-home-config-mode (parse-mode mode))))
+
+(defn stub-received-no-connection []
+  (g/should= 0 (or (g/get :stub-connect-count) 0)))
+
+(defn stub-connection-has-no-authorization []
+  (g/should-be-nil (get (g/get :stub-connect-headers) "Authorization")))
+
 (defgiven "a stub /cli server that replies with frames:" isaac.cli-proxy.cli-proxy-steps/stub-cli-server)
 (defgiven "a stub /cli server that assigns stream-id {stream-id:string} and replies with frames:"
   isaac.cli-proxy.cli-proxy-steps/stub-cli-server-with-stream-id)
@@ -256,9 +324,15 @@
 (defgiven "the stub server on reattach replays frames:" isaac.cli-proxy.cli-proxy-steps/stub-server-reattach-replies)
 (defgiven "the stub defers replies until stdin-close" isaac.cli-proxy.cli-proxy-steps/stub-defer-replies)
 (defgiven "the stub server refuses reattach for {n:int} attempts" isaac.cli-proxy.cli-proxy-steps/stub-server-refuses-reattach)
+(defgiven "a file {path:string} with mode {mode:string} containing {content:string}"
+  isaac.cli-proxy.cli-proxy-steps/file-with-mode)
+(defgiven "the home config file with mode {mode:string} contains:"
+  isaac.cli-proxy.cli-proxy-steps/home-config-with-mode)
 
 (defwhen "isaac remote is run with {args:string}" isaac.cli-proxy.cli-proxy-steps/isaac-remote-run)
 
 (defthen "the stub server received frames:" isaac.cli-proxy.cli-proxy-steps/stub-received-frames)
 (defthen "the stub connection authorization is {expected:string}"
   isaac.cli-proxy.cli-proxy-steps/stub-connection-authorization)
+(defthen "the stub server received no connection" isaac.cli-proxy.cli-proxy-steps/stub-received-no-connection)
+(defthen "the stub connection has no authorization" isaac.cli-proxy.cli-proxy-steps/stub-connection-has-no-authorization)

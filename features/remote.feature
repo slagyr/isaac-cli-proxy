@@ -75,7 +75,6 @@ Feature: remote CLI proxy
 
   # --- isaac-tvcg: authenticate without the token in argv ---------------------
 
-  @wip
   Scenario: --token still authenticates but warns that it exposes the secret (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -87,7 +86,6 @@ Feature: remote CLI proxy
     And the stderr does not contain "my-secret"
     And the exit code is 0
 
-  @wip
   Scenario: a private token file supplies the bearer credential (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -97,7 +95,6 @@ Feature: remote CLI proxy
     Then the stub connection authorization is "Bearer file-secret"
     And the exit code is 0
 
-  @wip
   Scenario: a group- or world-readable token file is refused before connecting (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -109,7 +106,6 @@ Feature: remote CLI proxy
     And the stub server received no connection
     And the exit code is 1
 
-  @wip
   Scenario: a named environment variable supplies the bearer credential (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -119,7 +115,6 @@ Feature: remote CLI proxy
     Then the stub connection authorization is "Bearer env-secret"
     And the exit code is 0
 
-  @wip
   Scenario: an unset named environment variable is an error naming the variable (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -129,7 +124,6 @@ Feature: remote CLI proxy
     And the stub server received no connection
     And the exit code is 1
 
-  @wip
   Scenario: ISAAC_REMOTE_TOKEN supplies the bearer credential with no flag (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -139,7 +133,6 @@ Feature: remote CLI proxy
     Then the stub connection authorization is "Bearer default-secret"
     And the exit code is 0
 
-  @wip
   Scenario: the home config's remote token is used when the url matches (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -153,7 +146,6 @@ Feature: remote CLI proxy
     Then the stub connection authorization is "Bearer pointer-secret"
     And the exit code is 0
 
-  @wip
   Scenario: a literal token in a readable home config is refused (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -168,7 +160,6 @@ Feature: remote CLI proxy
     And the stub server received no connection
     And the exit code is 1
 
-  @wip
   Scenario: the home config's token is ignored for a different url (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -181,7 +172,6 @@ Feature: remote CLI proxy
     Then the stub connection has no authorization
     And the exit code is 0
 
-  @wip
   Scenario: an explicit token file beats ISAAC_REMOTE_TOKEN (isaac-tvcg)
     Given a stub /cli server that replies with frames:
       | type | code |
