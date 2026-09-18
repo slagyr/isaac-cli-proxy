@@ -24,8 +24,8 @@ Feature: remote CLI integration
     And the Isaac server is started
     And stdin is empty
     When isaac is run with "remote ws://localhost:${server.port}/cli -- --version"
-    Then the stderr contains "authentication failed"
-    And the exit code is 1
+    Then the stderr contains "token rejected"
+    And the exit code is 77
 
   Scenario: a valid token authenticates the remote command
     Given config:

@@ -22,6 +22,20 @@
 
 (helper! isaac.cli-proxy.cli-proxy-steps)
 
+(declare interpolate)
+
+(defonce ^:private assertion-interpolation-patched? (atom false))
+
+(when (compare-and-set! assertion-interpolation-patched? false true)
+  (alter-var-root #'cli-steps/stdout-contains
+                  (fn [orig]
+                    (fn [expected]
+                      (orig (interpolate expected)))))
+  (alter-var-root #'cli-steps/stderr-contains
+                  (fn [orig]
+                    (fn [expected]
+                      (orig (interpolate expected))))))
+
 (cli-registry/register! (remote-cli/make-command))
 
 (def ^:private stub-url "loopback://cli-stub")
@@ -177,6 +191,26 @@
 (defn stub-server-refuses-reattach [n]
   (ws/refuse-reconnects! (g/get :stub-transport) n))
 
+(defn stub-rejects-upgrade []
+  (config-env/set-env-override! "NOPE" "rejected-token")
+  (g/assoc! :stub-url stub-url)
+  (g/assoc! :stub-connect-count 0)
+  (g/assoc! :main-extra-opts
+            {:connection-factory (fn [_ _]
+                                   (throw (ex-info "401 token rejected" {}))) }))
+
+(defn no-server-listening []
+  (g/assoc! :stub-url "ws://127.0.0.1:1/cli")
+  (g/assoc! :main-extra-opts
+            {:connection-factory (fn [_ _]
+                                   (throw (ex-info "connection refused" {}))) }))
+
+(defn stub-never-completes []
+  (g/assoc! :stub-url stub-url)
+  (g/assoc! :main-extra-opts
+            {:connection-factory (fn [_ _]
+                                   (throw (ex-info "connect timed out" {}))) }))
+
 (defn- tmp-dir []
   (or (g/get :tmp-dir)
       (let [dir (str (Files/createTempDirectory "isaac-cli-proxy-" (make-array java.nio.file.attribute.FileAttribute 0)))]
@@ -190,6 +224,7 @@
 
 (defn- interpolate-remote-args [args]
   (-> args interpolate (str/replace "\\\"" "\"")))
+
 
 (defn- feature-env [name]
   (or (config-env/env name) (c3env/env name)))
@@ -311,6 +346,16 @@
     (g/assoc! :remote-home-config (get-in (edn/read-string content) [:cli :remote]))
     (g/assoc! :remote-home-config-mode (parse-mode mode))))
 
+(defn home-config-matches [content]
+  (g/should= (edn/read-string (interpolate content))
+             (edn/read-string (slurp (str (tmp-dir) "/.config/isaac.edn")))))
+
+(defn home-config-mode-is [mode]
+  (g/should= (parse-mode mode) (token/posix-mode (str (tmp-dir) "/.config/isaac.edn"))))
+
+(defn home-config-contains [text]
+  (g/should (str/includes? (slurp (str (tmp-dir) "/.config/isaac.edn")) text)))
+
 (defn stub-received-no-connection []
   (g/should= 0 (or (g/get :stub-connect-count) 0)))
 
@@ -324,6 +369,9 @@
 (defgiven "the stub server on reattach replays frames:" isaac.cli-proxy.cli-proxy-steps/stub-server-reattach-replies)
 (defgiven "the stub defers replies until stdin-close" isaac.cli-proxy.cli-proxy-steps/stub-defer-replies)
 (defgiven "the stub server refuses reattach for {n:int} attempts" isaac.cli-proxy.cli-proxy-steps/stub-server-refuses-reattach)
+(defgiven "a stub /cli server that rejects the upgrade with 401" isaac.cli-proxy.cli-proxy-steps/stub-rejects-upgrade)
+(defgiven "no server is listening at the stub url" isaac.cli-proxy.cli-proxy-steps/no-server-listening)
+(defgiven "a stub /cli server that never completes the upgrade" isaac.cli-proxy.cli-proxy-steps/stub-never-completes)
 (defgiven "a file {path:string} with mode {mode:string} containing {content:string}"
   isaac.cli-proxy.cli-proxy-steps/file-with-mode)
 (defgiven "the home config file with mode {mode:string} contains:"
@@ -336,3 +384,6 @@
   isaac.cli-proxy.cli-proxy-steps/stub-connection-authorization)
 (defthen "the stub server received no connection" isaac.cli-proxy.cli-proxy-steps/stub-received-no-connection)
 (defthen "the stub connection has no authorization" isaac.cli-proxy.cli-proxy-steps/stub-connection-has-no-authorization)
+(defthen "the home config file matches:" isaac.cli-proxy.cli-proxy-steps/home-config-matches)
+(defthen "the home config file has mode {mode:string}" isaac.cli-proxy.cli-proxy-steps/home-config-mode-is)
+(defthen "the home config file contains {text:string}" isaac.cli-proxy.cli-proxy-steps/home-config-contains)

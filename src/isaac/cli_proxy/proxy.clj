@@ -114,11 +114,16 @@
     (or (= "java.net.http.WebSocketHandshakeException" class-name)
         (re-find #"(?i)401|unauthorized|authentication failed" message))))
 
+(defn- connect-error [error url]
+  (let [message (or (.getMessage error) "connection failed")]
+    (if (authentication-error? error)
+      {:code 77 :message (str url " token rejected; run with --local to bypass")}
+      {:code 69 :message (str url " is not reachable: " message "; run with --local to bypass")})))
+
 (defn- print-connect-error! [error url]
-  (binding [*out* *err*]
-    (println (if (authentication-error? error)
-               "authentication failed"
-               (str "could not connect to remote CLI endpoint: " url)))))
+  (let [{:keys [message]} (connect-error error url)]
+    (binding [*out* *err*]
+      (println message))))
 
 (defn- connect! [factory url token]
   (factory url {:headers (bearer-headers token)}))
@@ -336,4 +341,4 @@
           (some-> @conn* ws/ws-close!))))
     (catch Exception e
       (print-connect-error! e url)
-      1)))
+      (:code (connect-error e url)))))

@@ -18,7 +18,7 @@
 (defn- secure-mode? [mode]
   (zero? (bit-and (long mode) 077)))
 
-(defn- posix-mode [path]
+(defn posix-mode [path]
   (let [permissions (Files/getPosixFilePermissions (.toPath (java.io.File. path))
                                                     (make-array LinkOption 0))]
     (reduce (fn [mode [permission bit]]
