@@ -8,7 +8,7 @@ Feature: remote CLI integration
 
   Scenario: a remote command runs on the server and streams back
     Given config:
-      | server.host | 127.0.0.1 |
+      | http.host | 127.0.0.1 |
       | server.port | 0         |
     And the Isaac server is started
     And stdin is empty
@@ -18,9 +18,9 @@ Feature: remote CLI integration
 
   Scenario: the server rejects a remote command without a valid token
     Given config:
-      | server.host       | 0.0.0.0   |
-      | server.port       | 0         |
-      | server.auth.token | secret123 |
+      | http.host       | 0.0.0.0   |
+      | http.port         | 0         |
+      | http.auth.token | secret123 |
     And the Isaac server is started
     And stdin is empty
     When isaac is run with "remote ws://localhost:${server.port}/cli -- --version"
@@ -29,9 +29,9 @@ Feature: remote CLI integration
 
   Scenario: a valid token authenticates the remote command
     Given config:
-      | server.host       | 0.0.0.0   |
-      | server.port       | 0         |
-      | server.auth.token | secret123 |
+      | http.host       | 0.0.0.0   |
+      | http.port         | 0         |
+      | http.auth.token | secret123 |
     And the Isaac server is started
     And stdin is empty
     When isaac is run with "remote ws://localhost:${server.port}/cli --token secret123 -- --version"

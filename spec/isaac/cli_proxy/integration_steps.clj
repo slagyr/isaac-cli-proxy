@@ -214,8 +214,8 @@
   (ensure-acp-fixture-root!)
   (g/update! :server-config
              #(-> (or % {})
-                  (assoc-in [:server :host] "127.0.0.1")
-                  (assoc-in [:server :port] 0)))
+                  (assoc-in [:http :host] "127.0.0.1")
+                  (assoc-in [:http :port] 0)))
   (server-steps/server-running)
   (g/assoc! :server-url (server-url)))
 
