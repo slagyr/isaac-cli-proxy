@@ -306,3 +306,95 @@ Feature: remote CLI proxy
     And the stdout contains "\"id\":2"
     And the stdout does not contain "replayed"
     And the exit code is 0
+
+  # --- isaac-gar0: the remote setting and failure reporting --------------------
+  # Routing itself (launcher decides from ~/.config/isaac.edn) is proved in
+  # isaac-foundation features/cli/remote_routing.feature; these cover the
+  # module's half: managing the setting and reporting why a remote failed.
+
+  @wip
+  Scenario: remote use writes the setting and preserves the root pointer (isaac-gar0)
+    Given the home config file with mode "644" contains:
+      """
+      {:root "/tmp/user/.isaac"}
+      """
+    When isaac remote is run with "use wss://zanebot.example/cli --token-env ZANE_TOK"
+    Then the exit code is 0
+    And the home config file matches:
+      """
+      {:root "/tmp/user/.isaac"
+       :cli  {:remote {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}
+      """
+
+  @wip
+  Scenario: remote use with a literal token writes a private file (isaac-gar0)
+    Given a file "${tmp}/token" with mode "600" containing "literal-secret"
+    When isaac remote is run with "use wss://zanebot.example/cli --token-file ${tmp}/token"
+    Then the exit code is 0
+    And the home config file has mode "600"
+    And the home config file contains "literal-secret"
+    And the stdout does not contain "literal-secret"
+
+  @wip
+  Scenario: remote off removes the setting and keeps everything else (isaac-gar0)
+    Given the home config file with mode "644" contains:
+      """
+      {:root "/tmp/user/.isaac" :other 1
+       :cli  {:remote {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}
+      """
+    When isaac remote is run with "off"
+    Then the exit code is 0
+    And the home config file matches:
+      """
+      {:root "/tmp/user/.isaac" :other 1}
+      """
+
+  @wip
+  Scenario: remote status reports the target and a successful probe (isaac-gar0)
+    Given a stub /cli server that replies with frames:
+      | type   | data  | code |
+      | stdout | 0.1.0 |      |
+      | exit   |       | 0    |
+    And environment variable "ZANE_TOK" is "probe-secret"
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remote {:url "${stub.url}" :token "${ZANE_TOK}"}}}
+      """
+    When isaac remote is run with "status"
+    Then the stdout contains "${stub.url}"
+    And the stdout contains "reachable"
+    And the stdout does not contain "probe-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: remote status with no setting says so (isaac-gar0)
+    When isaac remote is run with "status"
+    Then the stdout contains "not configured"
+    And the exit code is 0
+
+  @wip
+  Scenario: a rejected token is reported as an auth failure (isaac-gar0)
+    Given a stub /cli server that rejects the upgrade with 401
+    When isaac remote is run with "${stub.url} --token-env NOPE -- version"
+    Then the exit code is 77
+    And the stderr contains "${stub.url}"
+    And the stderr contains "token rejected"
+    And the stderr contains "--local"
+
+  @wip
+  Scenario: a refused connection is reported with the url and reason (isaac-gar0)
+    Given no server is listening at the stub url
+    When isaac remote is run with "${stub.url} -- version"
+    Then the exit code is 69
+    And the stderr contains "${stub.url}"
+    And the stderr contains "refused"
+    And the stderr contains "--local"
+
+  @wip
+  Scenario: a connect timeout is bounded and reported (isaac-gar0)
+    Given a stub /cli server that never completes the upgrade
+    And environment variable "ISAAC_REMOTE_CONNECT_SECS" is "1"
+    When isaac remote is run with "${stub.url} -- version"
+    Then the exit code is 69
+    And the stderr contains "timed out"
+    And the stderr contains "--local"
