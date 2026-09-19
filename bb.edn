@@ -5,17 +5,17 @@
  ;; ships bb.test-tasks under spec-support/src/bb/. Product pins below match
  ;; the pre-xapx bb classpath (bump intentionally when ready).
  :deps  {io.github.slagyr/isaac-foundation              {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "82e3594346cb5f0e780c0fa05e0eca22634e3a06"}
+                                                          :git/sha "df64bf15c739165c496cbf81e3d922ad3aa3346f"}
          io.github.slagyr/isaac-foundation-spec         {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "82e3594346cb5f0e780c0fa05e0eca22634e3a06"
+                                                          :git/sha "df64bf15c739165c496cbf81e3d922ad3aa3346f"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-foundation-test-support {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "82e3594346cb5f0e780c0fa05e0eca22634e3a06"
+                                                          :git/sha "df64bf15c739165c496cbf81e3d922ad3aa3346f"
                                                           :deps/root "spec-support"}
          io.github.slagyr/isaac-agent                     {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                          :git/sha "104b3c4a9c62cff62607a28d3c60da5038688d9f"}
+                                                          :git/sha "fd8922637fa2ec7a2d29d46d8c8c8ec3a495d2c3"}
          io.github.slagyr/isaac-agent-spec               {:git/url "https://github.com/slagyr/isaac-agent.git"
-                                                          :git/sha "104b3c4a9c62cff62607a28d3c60da5038688d9f"
+                                                          :git/sha "fd8922637fa2ec7a2d29d46d8c8c8ec3a495d2c3"
                                                           :deps/root "spec"}
          io.github.slagyr/isaac-http                    {:git/url "https://github.com/slagyr/isaac-http.git"
                                                           :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"}
@@ -28,10 +28,10 @@
          io.github.slagyr/isaac-cli-server                {:git/url "https://github.com/slagyr/isaac-cli-server.git"
                                                           :git/sha "ae0743a566063ed87dce26c31783a37bbab9cbee"}
          marigold.bridge/marigold.bridge                  {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "82e3594346cb5f0e780c0fa05e0eca22634e3a06"
+                                                          :git/sha "df64bf15c739165c496cbf81e3d922ad3aa3346f"
                                                           :deps/root "modules/marigold.bridge"}
          marigold.longwave/marigold.longwave              {:git/url "https://github.com/slagyr/isaac-foundation.git"
-                                                          :git/sha "82e3594346cb5f0e780c0fa05e0eca22634e3a06"
+                                                          :git/sha "df64bf15c739165c496cbf81e3d922ad3aa3346f"
                                                           :deps/root "modules/marigold.longwave"}
          clout/clout                                      {:mvn/version "1.1.0"}
          com.cleancoders.c3kit/apron                      {:mvn/version "3.0.0"}
@@ -92,9 +92,14 @@
                 :task (binding [tests/*jvm-features-cmd* ["clojure" "-M:features"]]
                         (apply tests/run-jvm-features! *command-line-args*))}
 
+  lint-cli-host {:doc "Fail on process-global operations outside the CLI host boundary"
+                 :requires ([isaac.foundation.cli-host-lint :as lint])
+                 :task (lint/lint! *command-line-args*)}
+
   ci {:doc  "Native specs + features + slow features"
       :requires ([babashka.process :as process])
       :task (do (run 'config-bypass-lint)
+                (run 'lint-cli-host)
                 (doseq [t ["spec" "features" "features-slow"]]
                   (let [{:keys [exit]} (process/shell "bb" t)]
                     (when (pos? exit) (System/exit exit)))))}

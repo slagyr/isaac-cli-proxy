@@ -3,6 +3,7 @@
     [c3kit.apron.env :as c3env]
     [cheshire.core :as json]
     [clojure.string :as str]
+    [isaac.cli.host :as host]
     [isaac.cli-proxy.protocol :as protocol]
     [isaac.cli-proxy.ws :as ws]
     [isaac.logger :as log])
@@ -12,7 +13,7 @@
 (def ^:dynamic *connection-factory* ws/connect!)
 (def ^:dynamic *sleep-fn* (fn [ms] (Thread/sleep (long ms))))
 (def ^:dynamic *now-ms* (fn [] (System/currentTimeMillis)))
-(def ^:dynamic *stdout-tty?* #(some? (System/console)))
+(def ^:dynamic *stdout-tty?* host/tty?)
 
 (def DEFAULT-RECONNECT-WINDOW-SECS 120)
 (def RECONNECT-INITIAL-DELAY-MS 250)
@@ -88,9 +89,10 @@
 (defn- pump-stdin! [conn* acp*]
   (future
     (try
-      (let [reader (if (instance? BufferedReader *in*)
-                     *in*
-                     (BufferedReader. *in*))]
+      (let [in     (host/in)
+            reader (if (instance? BufferedReader in)
+                     in
+                     (BufferedReader. in))]
         (loop []
           (when-let [line (.readLine reader)]
             (let [text (str line "\n")]
