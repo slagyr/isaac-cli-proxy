@@ -9,7 +9,7 @@ Feature: remote CLI integration
   Scenario: a remote command runs on the server and streams back
     Given config:
       | http.host | 127.0.0.1 |
-      | server.port | 0         |
+      | http.port   | 0         |
     And the Isaac server is started
     And stdin is empty
     When isaac is run with "remote ws://localhost:${server.port}/cli -- --version"

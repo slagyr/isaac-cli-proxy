@@ -43,15 +43,15 @@
                                                                           :git/sha "fd8922637fa2ec7a2d29d46d8c8c8ec3a495d2c3"
                                                                           :deps/root "spec"}
                             io.github.slagyr/isaac-http                  {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                                          :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"}
+                                                                          :git/sha "493416d8e6508190f72ce56f7a99128b6a4a63f6"}
                             io.github.slagyr/isaac-http-spec             {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                                          :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"
+                                                                          :git/sha "493416d8e6508190f72ce56f7a99128b6a4a63f6"
                                                                           :deps/root "spec"}
                             io.github.slagyr/isaac-http-test-support   {:git/url "https://github.com/slagyr/isaac-http.git"
-                                                                          :git/sha "11e43014ad5c7b9c8bb693e0eb4f673bbd23991d"
+                                                                          :git/sha "493416d8e6508190f72ce56f7a99128b6a4a63f6"
                                                                           :deps/root "spec-support"}
                             io.github.slagyr/isaac-cli-server              {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-                                                                          :git/sha "ae0743a566063ed87dce26c31783a37bbab9cbee"}
+                                                                          :git/sha "007da61d029b73b347a003cff47ecae3d87eb49a"}
                             clout/clout                                    {:mvn/version "1.1.0"}
                             com.cleancoders.c3kit/apron                    {:mvn/version "3.0.0"}
                             http-kit/http-kit                              {:mvn/version "2.8.0"}
