@@ -1,7 +1,12 @@
 (ns isaac.cli-proxy.integration-steps
-  "End-to-end harness for features/integration.feature: ensure the cli-server
-   /cli route is visible to the server harness (classpath discovery plus an
-   explicit inject fallback for sibling checkouts or git-pinned CI)."
+  "End-to-end harness for features/integration.feature: make the cli-server
+   /cli route and the embedded commands the scenarios drive (acp, prompt)
+   visible to the server harness (classpath discovery plus an explicit inject
+   fallback for sibling checkouts or git-pinned CI).
+
+   isaac-dqy9: commands run inside the server process, so there is no launcher
+   to install and no subprocess to point at a fixture root — the server's own
+   root is the fixture root."
   (:require
     [babashka.fs :as bbs]
     [babashka.process :as process]
@@ -12,15 +17,15 @@
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
     [isaac.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
-    [isaac.cli-server.dispatch :as dispatch]
     [isaac.foundation.cli-steps :as cli-steps]
+    [isaac.foundation.log-steps :as foundation-log]
     [isaac.fs :as fs]
     [isaac.logger :as log]
     [isaac.nexus :as nexus]
     [isaac.http.server-steps :as server-steps]
     [isaac.util.jsonrpc :as jrpc])
   (:import
-    (java.io BufferedReader File InputStreamReader OutputStreamWriter)
+    (java.io BufferedReader InputStreamReader OutputStreamWriter)
     (java.util.concurrent LinkedBlockingQueue TimeUnit)))
 
 (helper! isaac.cli-proxy.integration-steps)
@@ -33,15 +38,13 @@
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
-   :git/sha "738fe6b67806b41b59a951e06f1a7e5d8b9823a1"})
+   :git/sha "c3560df78f8c163923c8965b2c2cfe76264a6c36"})
 
 (def ^:private interactive-timeout-ms 15000)
 (def ^:private interactive-eof ::interactive-eof)
 (def ^:private fixture-session-name "lcay-session")
 (def ^:private interactive-client-expr
   "(require '[isaac.cli-proxy.cli :as remote-cli]) (System/exit (remote-cli/run-fn {:_raw-args (vec *command-line-args*)}))")
-(def ^:private test-isaac-launcher-script "target/test-bin/isaac")
-(defonce ^:private prior-launcher-command* (atom nil))
 
 (defn- ensure-remote-command! []
   (when-not (cli-registry/get-command "remote")
@@ -59,56 +62,17 @@
         (when (.isPresent cmd) (.get cmd)))
       "bb"))
 
-(defn- write-text! [path content]
-  (.mkdirs (.getParentFile (io/file path)))
-  (spit path content))
-
-(defn- project-root []
-  (System/getProperty "user.dir"))
-
-(defn- test-isaac-launcher-path []
-  (str (project-root) "/" test-isaac-launcher-script))
-
-(defn -ensure-test-isaac-launcher!
-  "Write target/test-bin/isaac that execs this repo's bb.edn via the resolved bb."
-  []
-  (let [script-path (test-isaac-launcher-path)
-        bb          (-resolve-bb-bin)]
-    (write-text! script-path
-                 (str "#!/usr/bin/env bash\n"
-                      "set -euo pipefail\n"
-                      "ROOT=\"$(cd \"$(dirname \"$0\")/../..\" && pwd)\"\n"
-                      "exec " bb " --config \"$ROOT/bb.edn\" -m isaac.main \"$@\"\n"))
-    (.setExecutable (io/file script-path) true)
-    script-path))
-
-(defn -restore-launcher-command! []
-  (when-let [prior @prior-launcher-command*]
-    (alter-var-root #'dispatch/*launcher-command* (constantly prior))
-    (reset! prior-launcher-command* nil)))
-
-(defn -install-test-isaac-launcher!
-  "Point cli-server dispatch at the test launcher (absolute path). Required on
-   CI where bare `isaac` is not on PATH; local machines with a real isaac bin
-   still prefer the project-local launcher so pins match the checkout."
-  []
-  (let [script-path (-ensure-test-isaac-launcher!)]
-    (when (nil? @prior-launcher-command*)
-      (reset! prior-launcher-command* dispatch/*launcher-command*))
-    (alter-var-root #'dispatch/*launcher-command* (constantly [script-path]))
-    script-path))
-
 (defn- cli-server-sibling-root []
   nil)
 
 (defn- cli-server-manifest-from-url [url]
   (some-> url io/reader slurp edn/read-string))
 
-(defn- cli-server-manifest-from-classpath []
+(defn- manifest-from-classpath [module-id]
   (when-let [loader (.getContextClassLoader (Thread/currentThread))]
     (some (fn [url]
             (let [manifest (cli-server-manifest-from-url url)]
-              (when (= :isaac.cli-server (:id manifest))
+              (when (= module-id (:id manifest))
                 manifest)))
           (enumeration-seq (.getResources loader "isaac-manifest.edn")))))
 
@@ -117,7 +81,10 @@
               (io/file "src/isaac-manifest.edn")
               slurp
               edn/read-string)
-      (cli-server-manifest-from-classpath)))
+      (manifest-from-classpath :isaac.cli-server)))
+
+(defn- acp-manifest []
+  (manifest-from-classpath :isaac.comm.acp))
 
 (defn- cli-server-module-coord []
   (if-let [root (cli-server-sibling-root)]
@@ -133,6 +100,17 @@
                         :manifest manifest
                         :path     nil}}))
 
+;; isaac-dqy9: `acp` now runs inside the server, so the server's own registry
+;; needs the command. Declare the module and inject its classpath manifest the
+;; same way the /cli route is declared.
+(defn- acp-module-coord-map []
+  {:isaac.comm.acp acp-module-coord})
+
+(defn- acp-module-index [manifest]
+  {:isaac.comm.acp {:coord    acp-module-coord
+                    :manifest manifest
+                    :path     nil}})
+
 (defn- feature-fs []
   (or (g/get :mem-fs) (nexus/get :fs) (fs/real-fs)))
 
@@ -145,7 +123,9 @@
               current (if (fs/exists? fs* path)
                         (edn/read-string (fs/slurp fs* path))
                         {})
-              updated (update current :modules merge (cli-server-module-coord))]
+              updated (update current :modules merge
+                              (cli-server-module-coord)
+                              (acp-module-coord-map))]
           (fs/mkdirs fs* (fs/parent path))
           (fs/spit fs* path (pr-str updated)))))))
 
@@ -158,17 +138,21 @@
                             merge (cli-server-module-index manifest))))
     (persist-cli-server-module!)))
 
+(defn ensure-acp-command! []
+  (when-let [manifest (acp-manifest)]
+    (g/update! :server-config
+               #(-> (or % {})
+                    (update :modules merge (acp-module-coord-map))
+                    (update :inject-module-index
+                            merge (acp-module-index manifest))))))
+
 (defn- log-with-feature-source [original-log* level event file line & kvs]
   (apply original-log* level event (or file "spec/isaac/cli_proxy/integration_steps.clj") line kvs))
 
 (defn remote-cli-ready []
   (ensure-remote-command!)
   (alter-var-root #'log/log* #(partial log-with-feature-source %))
-  (ensure-cli-server-route!)
-  ;; Remote `isaac is run with` scenarios spawn cli-server which shells out to
-  ;; `isaac`. Install the project-local launcher so CI (no isaac on PATH) and
-  ;; local checkouts both hit this repo's bb.edn.
-  (-install-test-isaac-launcher!))
+  (ensure-cli-server-route!))
 
 (defn- close-quietly! [closeable]
   (when closeable
@@ -182,26 +166,8 @@
       (.destroy ^Process process)
       (catch Exception _))))
 
-(defn- delete-tree! [path]
-  (let [dir (io/file path)]
-    (when (.exists dir)
-      (doseq [f (reverse (file-seq dir))]
-        (.delete f)))))
-
-(defn- fixture-root []
-  (str (System/getProperty "user.dir") "/target/lcay-fixture-root"))
-
-(defn- ensure-acp-fixture-root! []
-  (let [root (fixture-root)]
-    (delete-tree! root)
-    (write-text! (str root "/config/isaac.edn")
-                 (pr-str {:defaults {:crew "main" :model "grover"}
-                          :crew     {"main" {:model :grover :soul "You are Atticus."}}
-                          :models   {"grover" {:model "echo" :provider "grover:openai" :context-window 32768}}
-                          :providers {}
-                          :modules  {:isaac.comm.acp acp-module-coord}}))
-    (g/assoc! :fixture-root root)
-    root))
+(defn- server-root []
+  (or (g/get :runtime-root-dir) (g/get :root)))
 
 (defn- server-url []
   (or (g/get :server-url)
@@ -209,14 +175,16 @@
         (str "ws://localhost:" port "/cli"))))
 
 (defn real-cli-server-backed-by-installed-isaac-with-echo-model []
-  (-install-test-isaac-launcher!)
   (ensure-cli-server-route!)
-  (ensure-acp-fixture-root!)
+  (ensure-acp-command!)
   (g/update! :server-config
              #(-> (or % {})
                   (assoc-in [:http :host] "127.0.0.1")
                   (assoc-in [:http :port] 0)))
   (server-steps/server-running)
+  ;; isaac-dqy9: embedded dispatch refuses a --root that is not the server's
+  ;; own, so ${fixture.root} IS the server root.
+  (g/assoc! :fixture-root (server-root))
   (g/assoc! :server-url (server-url)))
 
 (defn- parse-json-line [line]
@@ -292,17 +260,10 @@
 (defn -interactive-client-command [argv]
   (into [(-resolve-bb-bin) "-e" interactive-client-expr "--"] argv))
 
-(defn- with-test-launcher-path [f]
-  (let [launcher-dir  (.getParentFile (io/file (test-isaac-launcher-path)))
-        current-path  (or (System/getenv "PATH") "")
-        launcher-path (str (.getAbsolutePath launcher-dir) File/pathSeparator current-path)]
-    (binding [process/*defaults* (assoc process/*defaults* :extra-env {"PATH" launcher-path})]
-      (f))))
-
 (defn- interpolate-interactive-args [args]
   (-> args
       (str/replace "${server.url}" (or (server-url) ""))
-      (str/replace "${fixture.root}" (or (g/get :fixture-root) (fixture-root)))
+      (str/replace "${fixture.root}" (or (g/get :fixture-root) (str (server-root))))
       (str/replace "\\\"" "\"")))
 
 (defn- reset-interactive-state! []
@@ -327,45 +288,41 @@
              :exit-code))
 
 (defn- after-scenario-cleanup! []
-  (reset-interactive-state!)
-  (-restore-launcher-command!))
+  (reset-interactive-state!))
 
 (g/after-scenario after-scenario-cleanup!)
 
 (defn isaac-remote-run-interactively [args]
   (reset-interactive-state!)
-  (-install-test-isaac-launcher!)
-  (with-test-launcher-path
-    (fn []
-      (let [argv          (cli-steps/parse-argv (interpolate-interactive-args args))
-            proc          (process/process (-interactive-client-command argv)
-                                           {:dir (System/getProperty "user.dir")
-                                            :in  :pipe
-                                            :out :pipe
-                                            :err :pipe})
-            stdin-writer  (OutputStreamWriter. (:in proc))
-            stdout-reader (BufferedReader. (InputStreamReader. (:out proc)))
-            stderr-reader (BufferedReader. (InputStreamReader. (:err proc)))
-            stdout-drain  (start-line-drain! stdout-reader)
-            stderr-drain  (start-line-drain! stderr-reader)
-            wait-future   (future
-                            (let [process   ^Process (:proc proc)
-                                  exit-code (.waitFor process)]
-                              @(:future stdout-drain)
-                              @(:future stderr-drain)
-                              (g/assoc! :output (stdout-text))
-                              (g/assoc! :stderr (stderr-text))
-                              (g/assoc! :exit-code exit-code)
-                              exit-code))]
-        (g/assoc! :interactive-proc proc)
-        (g/assoc! :interactive-stdin-writer stdin-writer)
-        (g/assoc! :interactive-client-future wait-future)
-        (g/assoc! :interactive-stdout-queue (:queue stdout-drain))
-        (g/assoc! :interactive-stdout-lines* (:lines* stdout-drain))
-        (g/assoc! :interactive-stdout-future (:future stdout-drain))
-        (g/assoc! :interactive-stderr-queue (:queue stderr-drain))
-        (g/assoc! :interactive-stderr-lines* (:lines* stderr-drain))
-        (g/assoc! :interactive-stderr-future (:future stderr-drain))))))
+  (let [argv          (cli-steps/parse-argv (interpolate-interactive-args args))
+        proc          (process/process (-interactive-client-command argv)
+                                       {:dir (System/getProperty "user.dir")
+                                        :in  :pipe
+                                        :out :pipe
+                                        :err :pipe})
+        stdin-writer  (OutputStreamWriter. (:in proc))
+        stdout-reader (BufferedReader. (InputStreamReader. (:out proc)))
+        stderr-reader (BufferedReader. (InputStreamReader. (:err proc)))
+        stdout-drain  (start-line-drain! stdout-reader)
+        stderr-drain  (start-line-drain! stderr-reader)
+        wait-future   (future
+                        (let [process   ^Process (:proc proc)
+                              exit-code (.waitFor process)]
+                          @(:future stdout-drain)
+                          @(:future stderr-drain)
+                          (g/assoc! :output (stdout-text))
+                          (g/assoc! :stderr (stderr-text))
+                          (g/assoc! :exit-code exit-code)
+                          exit-code))]
+    (g/assoc! :interactive-proc proc)
+    (g/assoc! :interactive-stdin-writer stdin-writer)
+    (g/assoc! :interactive-client-future wait-future)
+    (g/assoc! :interactive-stdout-queue (:queue stdout-drain))
+    (g/assoc! :interactive-stdout-lines* (:lines* stdout-drain))
+    (g/assoc! :interactive-stdout-future (:future stdout-drain))
+    (g/assoc! :interactive-stderr-queue (:queue stderr-drain))
+    (g/assoc! :interactive-stderr-lines* (:lines* stderr-drain))
+    (g/assoc! :interactive-stderr-future (:future stderr-drain))))
 
 (defn- write-client-line! [line]
   (let [writer (g/get :interactive-stdin-writer)]
@@ -408,6 +365,10 @@
   (close-quietly! (g/get :interactive-stdin-writer))
   (g/dissoc! :interactive-stdin-writer))
 
+;; isaac-dqy9: the command runs inside the fixture server in THIS JVM, so the
+;; server's log is the in-memory log the foundation table step already reads.
+(def server-log-entries-match #'foundation-log/log-entries-match)
+
 (defgiven "the remote CLI command is registered" isaac.cli-proxy.integration-steps/remote-cli-ready
   "Registers `remote` and declares the cli-server module after Grover setup.")
 
@@ -434,3 +395,6 @@
 
 (defwhen "the client closes stdin"
   isaac.cli-proxy.integration-steps/client-closes-stdin)
+
+(defthen "the server log has entries matching:"
+  isaac.cli-proxy.integration-steps/server-log-entries-match)

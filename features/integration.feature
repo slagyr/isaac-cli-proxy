@@ -52,7 +52,6 @@ Feature: remote CLI integration
     When the client closes stdin
     Then the exit code is 0
 
-  @wip
   Scenario: a remote ACP session runs inside the server process (isaac-dqy9)
     Same flow as isaac-lcay, but the server hosts `acp` on its own thread —
     the session is created and written through the server's live store under
@@ -70,11 +69,10 @@ Feature: remote CLI integration
       | level | event                | argv    | hosted |
       | :info | :cli/command-started | ["acp"] | true   |
 
-  @wip
   Scenario: a remote prompt runs inside the server process and its turn is visible to the server (isaac-dqy9)
     Given a real cli-server backed by an isaac install with an echo model
     And stdin is empty
-    When isaac is run with "remote ${server.url} -- prompt --crew main --session dqy9-e2e -m ping"
+    When isaac is run with "remote ws://localhost:${server.port}/cli -- prompt --crew main --session dqy9-e2e -m ping"
     Then the stdout contains "ping"
     And the exit code is 0
     And the server log has entries matching:
