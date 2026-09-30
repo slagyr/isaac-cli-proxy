@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
 
  ;; isaac-cli-proxy is a module: it contributes the `remote` CLI command
  ;; (:isaac/cli berth). `isaac remote <url>/cli <cmd...>` opens a WebSocket to a

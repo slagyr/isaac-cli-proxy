@@ -1,9 +1,13 @@
 (ns isaac.cli-proxy.handbook-chapter-spec
   "Lint for isaac.cli-proxy's own handbook chapter (isaac-zk49): every
-   backtick `config:<path>` reference must resolve against the composed
-   config schema, and every `isaac <command>` invocation must name a
-   registered top-level CLI command. See the convention comment at the
-   top of the chapter file itself.
+   backtick `config:<dotted.path>` reference (no angle-bracket placeholder
+   inside the path) must resolve against the composed config schema, and
+   the word right after `isaac ` in every `isaac <command>` invocation
+   must name a registered top-level CLI command. Keep both literal and
+   real when you write one — this lint fails the build once either drifts
+   from what Isaac actually exposes. `<placeholder>` shapes (e.g.
+   `config:<dotted.path>` itself, or `<module-id>#<slug>`) are
+   intentionally skipped.
 
    Reads `:isaac/cli` straight off each raw manifest rather than through
    `isaac.module.berths/module-report` — this repo's pinned isaac-foundation
