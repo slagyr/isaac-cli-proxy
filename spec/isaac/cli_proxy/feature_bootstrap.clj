@@ -2,12 +2,12 @@
   "Loaded after isaac.**-steps. Drops colliding session/harness steps when the
    server harness is present."
   (:require [clojure.string :as str]
-            [isaac.logger :as log]))
+            [isaac.foundation.logger :as log]))
 
 (log/set-output! :memory)
 
 (def ^:private server-ns 'isaac.http.server-steps)
-(def ^:private session-ns 'isaac.session.session-steps)
+(def ^:private session-ns 'isaac.agent.session.session-steps)
 (def ^:private harness-ns 'isaac.foundation.harness-config-steps)
 
 (defn- without-templates [entries templates]

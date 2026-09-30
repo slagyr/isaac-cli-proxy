@@ -15,15 +15,15 @@
     [clojure.java.io :as io]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
-    [isaac.cli.registry :as cli-registry]
+    [isaac.foundation.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.foundation.log-steps :as foundation-log]
-    [isaac.fs :as fs]
-    [isaac.logger :as log]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.logger :as log]
+    [isaac.foundation.nexus :as nexus]
     [isaac.http.server-steps :as server-steps]
-    [isaac.util.jsonrpc :as jrpc])
+    [isaac.agent.util.jsonrpc :as jrpc])
   (:import
     (java.io BufferedReader InputStreamReader OutputStreamWriter)
     (java.util.concurrent LinkedBlockingQueue TimeUnit)))
@@ -34,11 +34,11 @@
 
 (def ^:private cli-server-git-coord
   {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-   :git/sha "007da61d029b73b347a003cff47ecae3d87eb49a"})
+   :git/sha "f1477a71c2efa8f7992fe4a7243eb14cc74c3e7e"})
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
-   :git/sha "c3560df78f8c163923c8965b2c2cfe76264a6c36"})
+   :git/sha "07f9fb813e8f6b6e7b5f10776e30825796315ea4"})
 
 (def ^:private interactive-timeout-ms 15000)
 (def ^:private interactive-eof ::interactive-eof)

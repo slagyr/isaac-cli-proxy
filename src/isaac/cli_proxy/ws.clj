@@ -1,7 +1,7 @@
 (ns isaac.cli-proxy.ws
   (:require
     [clojure.string :as str]
-    [isaac.logger :as log])
+    [isaac.foundation.logger :as log])
   (:import
     (java.net URI)
     (java.net.http HttpClient WebSocket WebSocket$Listener)

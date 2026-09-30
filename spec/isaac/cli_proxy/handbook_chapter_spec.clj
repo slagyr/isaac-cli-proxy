@@ -10,7 +10,7 @@
    intentionally skipped.
 
    Reads `:isaac/cli` straight off each raw manifest rather than through
-   `isaac.module.berths/module-report` — this repo's pinned isaac-foundation
+   `isaac.foundation.module.berths/module-report` — this repo's pinned isaac-foundation
    predates that helper (isaac-zk49: the pin bump this bean tried pulled in
    an unrelated isaac-foundation-test-support change to the @slow feature
    runner that isn't one of the bean's two named upstream changes, so the
@@ -18,11 +18,11 @@
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]
-    [isaac.config.schema-compose :as schema-compose]
-    [isaac.config.schema.resolve :as schema-resolve]
-    [isaac.fs :as fs]
-    [isaac.module.discovery :as discovery]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.config.schema-compose :as schema-compose]
+    [isaac.foundation.config.schema.resolve :as schema-resolve]
+    [isaac.foundation.fs :as fs]
+    [isaac.foundation.module.discovery :as discovery]
+    [isaac.foundation.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (def ^:private chapter-resource "isaac/cli_proxy/handbook.md")

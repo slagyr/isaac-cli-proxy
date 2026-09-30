@@ -3,10 +3,10 @@
     [c3kit.apron.env :as c3env]
     [cheshire.core :as json]
     [clojure.string :as str]
-    [isaac.cli.host :as host]
+    [isaac.foundation.cli.host :as host]
     [isaac.cli-proxy.protocol :as protocol]
     [isaac.cli-proxy.ws :as ws]
-    [isaac.logger :as log])
+    [isaac.foundation.logger :as log])
   (:import
     (java.io BufferedReader)))
 

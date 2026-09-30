@@ -4,17 +4,17 @@
     [clojure.edn :as edn]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
-    [isaac.cli.registry :as cli-registry]
+    [isaac.foundation.cli.registry :as cli-registry]
     [isaac.cli-proxy.cli :as remote-cli]
     [isaac.cli-proxy.token :as token]
-    [isaac.config.env :as config-env]
-    [isaac.config.root]
+    [isaac.foundation.config.env :as config-env]
+    [isaac.foundation.config.root]
     [isaac.cli-proxy.protocol :as protocol]
     [isaac.cli-proxy.proxy :as proxy]
     [isaac.cli-proxy.ws :as ws]
     [isaac.foundation.cli-steps :as cli-steps]
-    [isaac.spec-helper :as helper]
-    [isaac.step-tables :as match])
+    [isaac.foundation.spec-helper :as helper]
+    [isaac.agent.step-tables :as match])
   (:import
     (java.io StringReader)
     (java.nio.file Files)
@@ -238,7 +238,7 @@
         now*          (atom 0)]
     (binding [*out* out-w
               *err* err-w
-              isaac.config.root/*user-home* (tmp-dir)
+              isaac.foundation.config.root/*user-home* (tmp-dir)
               *in*  (java.io.BufferedReader. (StringReader. stdin-content))
               proxy/*stdout-tty?* (constantly true)
               proxy/*now-ms* (fn [] @now*)

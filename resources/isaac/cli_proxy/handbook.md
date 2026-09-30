@@ -26,7 +26,7 @@ contract produces, not the frame format itself.
 :token "…"}`), stored not in Isaac's regular config tree but in the
 operator's **home pointer file** (`~/.config/isaac.edn` — the same file that
 can carry `:root`). It is read once, before any config loads, by the
-launcher itself (foundation's `isaac.main`) to decide whether an *ordinary*
+launcher itself (foundation's `isaac.foundation.main`) to decide whether an *ordinary*
 `isaac <command>` should route to that server instead of running locally —
 see foundation's chapter, Appendix, for that decision. This module owns
 managing the setting, not the decision that reads it.

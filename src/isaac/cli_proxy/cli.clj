@@ -9,12 +9,12 @@
    See PROTOCOL.md for the wire contract."
   (:require
     [clojure.string :as str]
-    [isaac.cli.api :as cli-api]
-    [isaac.cli.registry :as registry]
+    [isaac.foundation.cli.api :as cli-api]
+    [isaac.foundation.cli.registry :as registry]
     [isaac.cli-proxy.proxy :as proxy]
     [isaac.cli-proxy.token :as token]
-    [isaac.config.cli.common :as cli-common]
-    [isaac.config.pointer :as pointer]))
+    [isaac.foundation.config.cli.common :as cli-common]
+    [isaac.cli-proxy.config.pointer :as pointer]))
 
 (def option-spec
   [[nil "--token TOKEN" "Deprecated: bearer token in argv (use a secure source below)"]

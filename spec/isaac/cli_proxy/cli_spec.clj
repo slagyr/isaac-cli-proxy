@@ -1,11 +1,11 @@
 (ns isaac.cli-proxy.cli-spec
   (:require
     [clojure.edn :as edn]
-    [isaac.cli.host :as host]
-    [isaac.cli.registry :as registry]
+    [isaac.foundation.cli.host :as host]
+    [isaac.foundation.cli.registry :as registry]
     [isaac.cli-proxy.cli :as sut]
-    [isaac.config.api :as config-api]
-    [isaac.nexus :as nexus]
+    [isaac.foundation.config.api :as config-api]
+    [isaac.foundation.nexus :as nexus]
     [speclj.core :refer :all]))
 
 (describe "parse-remote-opts"

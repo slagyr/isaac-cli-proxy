@@ -4,8 +4,8 @@
     [clojure.edn :as edn]
     [c3kit.apron.env :as c3env]
     [clojure.string :as str]
-    [isaac.config.env :as config-env]
-    [isaac.config.root :as root])
+    [isaac.foundation.config.env :as config-env]
+    [isaac.foundation.config.root :as root])
   (:import
     (java.nio.file Files LinkOption)
     (java.nio.file.attribute PosixFilePermission)))
