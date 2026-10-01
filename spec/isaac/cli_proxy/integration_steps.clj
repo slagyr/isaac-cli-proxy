@@ -34,11 +34,11 @@
 
 (def ^:private cli-server-git-coord
   {:git/url "https://github.com/slagyr/isaac-cli-server.git"
-   :git/sha "f1477a71c2efa8f7992fe4a7243eb14cc74c3e7e"})
+   :git/sha "a57a97ad253b0d3f9d09a7c71e48606445148c63"})
 
 (def ^:private acp-module-coord
   {:git/url "https://github.com/slagyr/isaac-acp.git"
-   :git/sha "07f9fb813e8f6b6e7b5f10776e30825796315ea4"})
+   :git/sha "e0f9711b63a81cccd936bca16af405b70a37a421"})
 
 (def ^:private interactive-timeout-ms 15000)
 (def ^:private interactive-eof ::interactive-eof)
