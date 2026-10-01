@@ -119,8 +119,8 @@
 (defn- connect-error [error url]
   (let [message (or (.getMessage error) "connection failed")]
     (if (authentication-error? error)
-      {:code 77 :message (str url " token rejected; run with --local to bypass")}
-      {:code 69 :message (str url " is not reachable: " message "; run with --local to bypass")})))
+      {:code 77 :message (str url " token rejected")}
+      {:code 69 :message (str url " is not reachable: " message)})))
 
 (defn- print-connect-error! [error url]
   (let [{:keys [message]} (connect-error error url)]

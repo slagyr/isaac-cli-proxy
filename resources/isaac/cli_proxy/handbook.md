@@ -156,9 +156,9 @@ a script, `--token-file` for a long-lived secret on disk, or `remote use
 file so plain `isaac remote <url>/cli -- ...` needs no flags at all.
 
 **How to verify.** A rejected token surfaces as `isaac remote: ... token
-rejected; run with --local to bypass` on stderr and exit code `77` — never
-a silent hang or a generic connection error. `isaac remote status`
-exercises the same resolution chain against the configured target.
+rejected` on stderr and exit code `77` — never a silent hang or a generic
+connection error. `isaac remote status` exercises the same resolution chain
+against the configured target.
 
 ### Troubleshooting
 

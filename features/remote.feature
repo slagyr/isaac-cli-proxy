@@ -363,7 +363,6 @@ Feature: remote CLI proxy
     Then the exit code is 77
     And the stderr contains "${stub.url}"
     And the stderr contains "token rejected"
-    And the stderr contains "--local"
 
   Scenario: a refused connection is reported with the url and reason (isaac-gar0)
     Given no server is listening at the stub url
@@ -371,7 +370,6 @@ Feature: remote CLI proxy
     Then the exit code is 69
     And the stderr contains "${stub.url}"
     And the stderr contains "refused"
-    And the stderr contains "--local"
 
   Scenario: a connect timeout is bounded and reported (isaac-gar0)
     Given a stub /cli server that never completes the upgrade
@@ -379,4 +377,3 @@ Feature: remote CLI proxy
     When isaac remote is run with "${stub.url} -- version"
     Then the exit code is 69
     And the stderr contains "timed out"
-    And the stderr contains "--local"
