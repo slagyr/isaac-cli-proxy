@@ -5,11 +5,12 @@ You are a crew running inside Isaac. This chapter covers what
 against a remote server instead of the local process — the `isaac remote`
 command and its `use`/`off`/`status` subcommands, bearer-token resolution,
 the WebSocket wire client, and reconnect/resume. Foundation's own chapter
-(`handbook__read` topic `isaac.foundation`) covers config mechanics, the
-vocabulary table, and — in its Appendix — the routing *decision* itself
-(when an ordinary `isaac <command>` gets shipped to a remote transparently);
-read it first if you haven't. This chapter's own topic id is
-`isaac.cli-proxy`.
+(`handbook__read` topic `isaac.foundation`) covers config mechanics and the
+vocabulary table; read it for that context. Routing to a remote server is
+always explicit — there is no transparent default-remote mode for an
+ordinary `isaac <command>`; every remote invocation goes through the
+`isaac remote <url>/cli -- <command...>` form this chapter documents. This
+chapter's own topic id is `isaac.cli-proxy`.
 
 isaac-cli-proxy does not know what happens to a command once it lands on the
 far end. The server side — accepting the WebSocket, authenticating the
@@ -25,21 +26,14 @@ contract produces, not the frame format itself.
 **What it is.** A single optional setting, `:cli :remote` (`{:url "…"
 :token "…"}`), stored not in Isaac's regular config tree but in the
 operator's **home pointer file** (`~/.config/isaac.edn` — the same file that
-can carry `:root`). It is read once, before any config loads, by the
-launcher itself (foundation's `isaac.foundation.main`) to decide whether an *ordinary*
-`isaac <command>` should route to that server instead of running locally —
-see foundation's chapter, Appendix, for that decision. This module owns
-managing the setting, not the decision that reads it.
-
-`[verify]` The launcher resolves that automatic routing seam by looking for
-a function named `isaac.cli-proxy.client/run!`; as of this writing this
-module's source has no `isaac.cli-proxy.client` namespace, only
-`isaac.cli-proxy.cli` (the explicit `remote` command) and
-`isaac.cli-proxy.proxy` (the connection loop it calls). Confirm whether
-implicit remote-by-default routing is actually wired end-to-end before
-relying on it — the explicit `isaac remote <url>/cli -- <command...>`
-invocation below is fully implemented and covered by feature scenarios
-regardless.
+can carry `:root`). This module is the only reader of it: `isaac.cli-proxy.cli`
+(the `remote` command) and `isaac.cli-proxy.token` (the Authentication
+resolution chain, below) are the two places that look at the key. Saving a
+target with `remote use` has no effect on an ordinary `isaac <command>` —
+Isaac has no implicit remote-by-default routing. `remote status` reads the
+setting to know which URL to probe, and token resolution falls back to it
+as a last resort; running a command against that target is always the
+explicit `isaac remote <url>/cli -- <command...>` form (below).
 
 Because the pointer file is read before config exists, it has **no config
 schema** and **no `handbook__configure` path** — same stance foundation
@@ -79,11 +73,11 @@ immediately as "unreachable" rather than silently falling back to local.
   always `~/.config/isaac.edn` for the *current* user running the command,
   not the target server's.
 - **A setting written by `remote use` doesn't seem to affect ordinary
-  commands** (`isaac sessions list` still runs locally). That's the
-  implicit-routing seam flagged `[verify]` above — confirm the
-  `isaac.cli-proxy.client/run!` path is wired before assuming the pointer
-  file itself is wrong; the explicit `isaac remote <url>/cli -- <command>`
-  form does not depend on that seam and is the reliable fallback.
+  commands** (`isaac sessions list` still runs locally). That's expected,
+  not a bug — Isaac has no implicit remote-by-default routing. The setting
+  only feeds `remote status` and the Authentication fallback (below);
+  running a command against that target always takes the explicit `isaac
+  remote <url>/cli -- <command...>` form.
 
 ## Running a command on a remote server
 
@@ -98,16 +92,11 @@ command would, modulo network latency. An empty `argv` (just the URL, no
 
 A handful of commands never make sense to run this way — `server`,
 `service`, `modules`, and `remote` itself — because a down server has to be
-startable locally even when a remote target is configured; foundation's
-launcher already keeps those local before this module is even consulted
-(its chapter, Appendix). Separately, isaac-cli-server refuses the same
+startable locally even when a remote target is configured. This module
+marks its own `remote` command `:local-only true` in its manifest
+(`src/isaac-manifest.edn`), and isaac-cli-server refuses the same
 `:local-only` commands if they somehow arrive over the wire; that refusal
 is the server's, not this module's (`isaac.cli-server` topic).
-
-An operator can force any single invocation to stay local with `--local`,
-or force every invocation in a script with `ISAAC_CLI_LOCAL=1` — both are
-foundation's flags on the *implicit*-routing path (its chapter, Appendix),
-not options this module adds to `remote` itself.
 
 **How to change it.** Nothing to configure beyond the target (above) — the
 command to run is just the CLI invocation itself.
@@ -127,10 +116,10 @@ stdout means the round trip works end-to-end, including auth.
   separate frame types and rendered to the matching local stream
   independently — if a script depends on their relative ordering, that
   ordering is best-effort across the two frame streams, not guaranteed.
-- **A command you expect to run remotely runs locally, or vice versa,**
-  when you didn't pass `--local`/`ISAAC_CLI_LOCAL=1` yourself: that's the
-  implicit-routing decision, owned by foundation, not this module — see
-  its chapter's Appendix and the `[verify]` note above.
+- **`isaac remote <url>/cli -- server ...` (or `service`/`modules`/
+  `remote`) is refused by the server.** Expected — those commands are
+  `:local-only` and isaac-cli-server rejects them over the wire; run them
+  locally instead.
 
 ## Authentication
 
