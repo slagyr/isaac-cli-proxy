@@ -160,6 +160,14 @@
   (ensure-remote-command!)
   (alter-var-root #'log/log* #(partial log-with-feature-source %))
   (ensure-cli-server-route!)
+  ;; The main CLI refreshes its registry from configured modules. On CI there
+  ;; are no sibling checkout manifests to discover the proxy implicitly.
+  (let [path (str (g/get :root) "/config/isaac.edn")
+        fs*  (feature-fs)
+        config (edn/read-string (fs/slurp fs* path))]
+    (fs/spit fs* path
+             (pr-str (assoc-in config [:modules :isaac.cli-proxy]
+                               {:local/root (System/getProperty "user.dir")}))))
   ;; The /cli endpoint now requires a credential even on loopback. Existing
   ;; remote integration scenarios still supply their own auth when configured.
   (let [path (str (g/get :root) "/config/isaac.edn")
@@ -224,6 +232,19 @@
                                      (println (if (instance? isaac.foundation.cli.host.EmbeddedHost cli-host/*host*)
                                                 "embedded" "process"))
                                      0)}))
+
+(defn remote-exit-code-is [expected]
+  (let [expected (if (string? expected) (parse-long expected) expected)
+        _        (when (g/get :interactive-client-future)
+                   (deref (g/get :interactive-client-future) interactive-timeout-ms nil))
+        actual   (g/get :exit-code)]
+    (when (not= expected actual)
+      (throw (ex-info (str "Expected remote exit code " expected ", got " actual
+                           "\nRemote stderr: " (or (g/get :stderr) "")
+                           "\nRemote stdout: " (or (g/get :output) ""))
+                      {:expected expected :actual actual :stderr (g/get :stderr)
+                       :stdout (g/get :output)})))
+    (g/should= expected actual)))
 
 (defn isaac-file-mode [path expected]
   (g/should= (Integer/parseInt expected 8)
@@ -432,6 +453,7 @@
 
 (defgiven "the fixture command {name:string} is registered as server-only"
   isaac.cli-proxy.integration-steps/fixture-server-only)
+(defthen "the exit code is {int}" isaac.cli-proxy.integration-steps/remote-exit-code-is)
 (defthen "the isaac file {path:string} has mode {mode:string}"
   isaac.cli-proxy.integration-steps/isaac-file-mode)
 (defgiven "the token in {path:string} is replaced with {token:string}"

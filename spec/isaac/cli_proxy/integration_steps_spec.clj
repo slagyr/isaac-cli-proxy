@@ -2,6 +2,7 @@
   (:require
     [clojure.java.io :as io]
     [clojure.string :as str]
+    [gherclj.core :as g]
     [isaac.cli-proxy.integration-steps :as sut]
     [speclj.core :refer :all]))
 
@@ -18,6 +19,14 @@
       (should-not (str/blank? bb))
       (should (.isAbsolute (io/file bb)))
       (should (.exists (io/file bb)))))
+
+  (it "includes the remote stderr when an exit code differs"
+    (with-redefs [g/get (fn [key] ({:exit-code 1 :stderr "remote rejected: bad token"} key))
+                  g/should= (fn [expected actual]
+                              (when-not (= expected actual)
+                                (throw (ex-info (str "Expected: " expected ", got: " actual) {}))))]
+      (should-throw Exception #"remote rejected: bad token"
+        (sut/remote-exit-code-is 0))))
 
   (it "builds the interactive client command from the resolved bb"
     (let [bb  (sut/-resolve-bb-bin)

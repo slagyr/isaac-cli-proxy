@@ -6,6 +6,7 @@
 
 (log/set-output! :memory)
 
+(def ^:private cli-ns 'isaac.foundation.cli-steps)
 (def ^:private server-ns 'isaac.http.server-steps)
 (def ^:private session-ns 'isaac.agent.session.session-steps)
 (def ^:private harness-ns 'isaac.foundation.harness-config-steps)
@@ -34,6 +35,9 @@
            (into {}
                  (map (fn [[ns-sym entries]]
                         [ns-sym (cond
+                                  (= ns-sym cli-ns)
+                                  (without-templates entries ["the exit code is {int}"])
+
                                   (= ns-sym session-ns)
                                   (without-templates entries (session-drop-templates m))
 
