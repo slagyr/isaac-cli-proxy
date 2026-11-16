@@ -81,3 +81,15 @@ Feature: remote CLI integration
     And the server log has entries matching:
       | level | event        | session  |
       | :info | :turn/ended  | dqy9-e2e |
+
+  @wip
+  Scenario: isaac remote --help through the real CLI shows the remote's own help (isaac-59om)
+    Given the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}}
+      """
+    When isaac is run with "remote --help"
+    Then the stdout contains "isaac remote use <name> <url>"
+    And the stdout contains "isaac remote status [<name>]"
+    And the stdout contains "zane  wss://zanebot.example/cli  isaac remote zane -- <command>"
+    And the exit code is 0
