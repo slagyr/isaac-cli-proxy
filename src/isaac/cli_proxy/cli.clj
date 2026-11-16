@@ -20,7 +20,7 @@
   [[nil "--token TOKEN" "Deprecated: bearer token in argv (use a secure source below)"]
    [nil "--token-file PATH" "Read bearer token from a mode-600 file"]
    [nil "--token-env VAR" "Read bearer token from the named environment variable"]
-   [nil "--token-command CMD" "Run a command to retrieve the token (remote use only)"]
+   [nil "--token-command CMD" "Run a command to retrieve the token (with remote use <name> <url>)"]
    ["-h" "--help" "Show help"]])
 
 (defmethod cli-api/option-spec :remote [_id]
@@ -76,6 +76,21 @@
             (println (str "remote CLI configured: " name " " url))
             0))))))
 
+(declare list-remotes!)
+
+(defn- help-remote! []
+  (println (registry/command-help (registry/get-command "remote")))
+  (println "       isaac remote <url>/cli -- <command...>")
+  (println "       isaac remote use <name> <url> [--token-env VAR | --token-command CMD | --token-file PATH]")
+  (println "       isaac remote list")
+  (println "       isaac remote remove <name>")
+  (println "       isaac remote status [<name>]")
+  (println "Remotes live in ~/.config/isaac.edn under :cli :remotes.")
+  (when (seq (remotes))
+    (println "Configured remotes:")
+    (list-remotes!))
+  0)
+
 (defn- list-remotes! []
   (doseq [[name {:keys [url]}] (sort-by (comp clojure.core/name key) (remotes))]
     (println (str (clojure.core/name name) "  " url "  isaac remote "
@@ -119,7 +134,7 @@
         target-url (if named? (:url named) url)]
     (cond
       help
-      (do (println (registry/command-help (registry/get-command "remote"))) 0)
+      (help-remote!)
 
       (seq errors)
       (cli-common/print-cli-errors! errors)
@@ -159,7 +174,7 @@
   "Factory for feature tests and module registration."
   []
   {:name        "remote"
-   :usage       "remote <name|url>/cli -- <command...>"
+   :usage       "remote <name> -- <command...>"
    :summary     "Run an isaac command on a remote server over /cli"
    :option-spec option-spec
    :run-fn      run-fn})

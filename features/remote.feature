@@ -449,7 +449,6 @@ Feature: remote CLI proxy
     Then the exit code is 69
     And the stderr contains "timed out"
 
-  @wip
   Scenario: remote help shows the name form, the subcommands and the configured remotes (isaac-hlak)
     Given the home config file with mode "644" contains:
       """

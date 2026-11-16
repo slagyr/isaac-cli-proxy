@@ -3,13 +3,14 @@
 You are a crew running inside Isaac. This chapter covers what
 **isaac-cli-proxy** owns: the client half of running an `isaac` command
 against a remote server instead of the local process — the `isaac remote`
-command and its `use`/`off`/`status` subcommands, bearer-token resolution,
+command and its `use`/`list`/`remove`/`status` subcommands, bearer-token resolution,
 the WebSocket wire client, and reconnect/resume. Foundation's own chapter
 (`handbook__read` topic `isaac.foundation`) covers config mechanics and the
 vocabulary table; read it for that context. Routing to a remote server is
 always explicit — there is no transparent default-remote mode for an
 ordinary `isaac <command>`; every remote invocation goes through the
-`isaac remote <name|url>/cli -- <command...>` form this chapter documents. This
+`isaac remote <name> -- <command...>` or
+`isaac remote <url>/cli -- <command...>` form this chapter documents. This
 chapter's own topic id is `isaac.cli-proxy`.
 
 isaac-cli-proxy does not know what happens to a command once it lands on the
