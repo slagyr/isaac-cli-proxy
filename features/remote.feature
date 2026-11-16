@@ -448,3 +448,20 @@ Feature: remote CLI proxy
     When isaac remote is run with "${stub.url} -- version"
     Then the exit code is 69
     And the stderr contains "timed out"
+
+  @wip
+  Scenario: remote help shows the name form, the subcommands and the configured remotes (isaac-hlak)
+    Given the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}}
+      """
+    When isaac remote is run with "--help"
+    Then the stdout contains "isaac remote <name> -- <command...>"
+    And the stdout contains "isaac remote <url>/cli -- <command...>"
+    And the stdout contains "isaac remote use <name> <url>"
+    And the stdout contains "isaac remote list"
+    And the stdout contains "isaac remote remove <name>"
+    And the stdout contains "isaac remote status [<name>]"
+    And the stdout contains "~/.config/isaac.edn"
+    And the stdout contains "zane  wss://zanebot.example/cli  isaac remote zane -- <command>"
+    And the exit code is 0
