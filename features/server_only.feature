@@ -1,4 +1,4 @@
-@slow @wip
+@slow
 Feature: Server-only commands typed on the host run inside its server
   cli-proxy is the forwarder for foundation's :isaac/cli-forwarder berth
   (see isaac-dcxk). For a :server-only command it sends the argv over /cli to:

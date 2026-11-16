@@ -11,17 +11,22 @@
     [babashka.fs :as bbs]
     [babashka.process :as process]
     [cheshire.core :as json]
+    [c3kit.apron.env :as c3env]
     [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [gherclj.core :as g :refer [defgiven defwhen defthen helper!]]
     [isaac.foundation.cli.registry :as cli-registry]
+    [isaac.foundation.cli.host :as cli-host]
     [isaac.cli-proxy.cli :as remote-cli]
+    [isaac.cli-proxy.token :as token]
     [isaac.foundation.cli-steps :as cli-steps]
     [isaac.foundation.log-steps :as foundation-log]
     [isaac.foundation.fs :as fs]
     [isaac.foundation.logger :as log]
     [isaac.foundation.nexus :as nexus]
+    [isaac.foundation.root-steps :as root-steps]
+    [isaac.agent.session.session-steps :as session-steps]
     [isaac.http.server-steps :as server-steps]
     [isaac.agent.util.jsonrpc :as jrpc])
   (:import
@@ -63,7 +68,9 @@
       "bb"))
 
 (defn- cli-server-sibling-root []
-  nil)
+  (or (System/getenv "ISAAC_CLI_SERVER_ROOT")
+      (let [sibling (io/file "../isaac-cli-server-w0yx")]
+        (when (.isDirectory sibling) (.getCanonicalPath sibling)))))
 
 (defn- cli-server-manifest-from-url [url]
   (some-> url io/reader slurp edn/read-string))
@@ -152,7 +159,15 @@
 (defn remote-cli-ready []
   (ensure-remote-command!)
   (alter-var-root #'log/log* #(partial log-with-feature-source %))
-  (ensure-cli-server-route!))
+  (ensure-cli-server-route!)
+  ;; The /cli endpoint now requires a credential even on loopback. Existing
+  ;; remote integration scenarios still supply their own auth when configured.
+  (let [path (str (g/get :root) "/config/isaac.edn")
+        fs* (feature-fs)
+        config (edn/read-string (fs/slurp fs* path))]
+    (when-not (get-in config [:http :auth :token])
+      (fs/spit fs* path (pr-str (assoc-in config [:http :auth :token] "fixture-cli-secret"))))
+    (swap! c3env/-overrides assoc "ISAAC_REMOTE_TOKEN" "fixture-cli-secret")))
 
 (defn- close-quietly! [closeable]
   (when closeable
@@ -173,6 +188,51 @@
   (or (g/get :server-url)
       (when-let [port (g/get :server-port)]
         (str "ws://localhost:" port "/cli"))))
+
+(defn server-only-grover-setup []
+  (root-steps/initialize-root! "target/test-state" false)
+  ;; The explicit remote uses normal configured HTTP auth, not the discovery
+  ;; file (which the scenario deliberately replaces with a stale address).
+  (swap! c3env/-overrides assoc "ISAAC_REMOTE_TOKEN" "fixture-remote-secret")
+  (session-steps/ensure-grover-provider-files!)
+  (fs/mkdirs (feature-fs) (str (g/get :root) "/config/crew"))
+  (fs/spit (feature-fs) (str (g/get :root) "/config/crew/main.edn")
+           (pr-str {:model :grover :soul "You are Atticus."}))
+  (fs/spit (feature-fs) (str (g/get :root) "/config/isaac.edn")
+           (pr-str {:defaults {:frequencies {:crew "main"} :crew {:model "grover"}}
+                    :http {:auth {:token "fixture-remote-secret"}}})))
+
+(defn fixture-server-only [name]
+  (server-only-grover-setup)
+  (ensure-remote-command!)
+  (ensure-cli-server-route!)
+  (let [root (g/get :root)
+        coord {:local/root (System/getProperty "user.dir")}
+        manifest (edn/read-string (slurp "src/isaac-manifest.edn"))
+        config-path (str root "/config/isaac.edn")
+        current (edn/read-string (fs/slurp (feature-fs) config-path))]
+    (fs/spit (feature-fs) config-path
+             (pr-str (assoc-in current [:modules :isaac.cli-proxy] coord)))
+    (g/update! :server-config
+               #(-> (or % {})
+                    (assoc-in [:modules :isaac.cli-proxy] coord)
+                    (assoc-in [:inject-module-index :isaac.cli-proxy]
+                              {:coord coord :manifest manifest :path nil}))))
+  (cli-registry/register! {:name name
+                           :server-only true
+                           :run-fn (fn [_]
+                                     (println (if (instance? isaac.foundation.cli.host.EmbeddedHost cli-host/*host*)
+                                                "embedded" "process"))
+                                     0)}))
+
+(defn isaac-file-mode [path expected]
+  (g/should= (Integer/parseInt expected 8)
+             (token/posix-mode (str (server-root) "/" path))))
+
+(defn replace-local-token [path replacement]
+  (let [file (str (server-root) "/" path)
+        data (edn/read-string (fs/slurp (feature-fs) file))]
+    (fs/spit (feature-fs) file (pr-str (assoc data :token replacement)))))
 
 (defn real-cli-server-backed-by-installed-isaac-with-echo-model []
   (ensure-cli-server-route!)
@@ -258,7 +318,8 @@
      :future (future (run))}))
 
 (defn -interactive-client-command [argv]
-  (into [(-resolve-bb-bin) "-e" interactive-client-expr "--"] argv))
+  (into ["env" "ISAAC_REMOTE_TOKEN=fixture-cli-secret" (-resolve-bb-bin)
+         "-e" interactive-client-expr "--"] argv))
 
 (defn- interpolate-interactive-args [args]
   (-> args
@@ -368,6 +429,13 @@
 ;; isaac-dqy9: the command runs inside the fixture server in THIS JVM, so the
 ;; server's log is the in-memory log the foundation table step already reads.
 (def server-log-entries-match #'foundation-log/log-entries-match)
+
+(defgiven "the fixture command {name:string} is registered as server-only"
+  isaac.cli-proxy.integration-steps/fixture-server-only)
+(defthen "the isaac file {path:string} has mode {mode:string}"
+  isaac.cli-proxy.integration-steps/isaac-file-mode)
+(defgiven "the token in {path:string} is replaced with {token:string}"
+  isaac.cli-proxy.integration-steps/replace-local-token)
 
 (defgiven "the remote CLI command is registered" isaac.cli-proxy.integration-steps/remote-cli-ready
   "Registers `remote` and declares the cli-server module after Grover setup.")

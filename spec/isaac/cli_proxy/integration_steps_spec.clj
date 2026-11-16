@@ -22,9 +22,9 @@
   (it "builds the interactive client command from the resolved bb"
     (let [bb  (sut/-resolve-bb-bin)
           cmd (sut/-interactive-client-command ["ws://x/cli" "--" "version"])]
-      (should= bb (first cmd))
-      (should= "-e" (nth cmd 1))
-      (should= "--" (nth cmd 3))
-      (should= ["ws://x/cli" "--" "version"] (subvec (vec cmd) 4))))
+      (should= ["env" "ISAAC_REMOTE_TOKEN=fixture-cli-secret" bb] (subvec (vec cmd) 0 3))
+      (should= "-e" (nth cmd 3))
+      (should= "--" (nth cmd 5))
+      (should= ["ws://x/cli" "--" "version"] (subvec (vec cmd) 6))))
 
   )
