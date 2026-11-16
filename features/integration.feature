@@ -82,7 +82,6 @@ Feature: remote CLI integration
       | level | event        | session  |
       | :info | :turn/ended  | dqy9-e2e |
 
-  @wip
   Scenario: isaac remote --help through the real CLI shows the remote's own help (isaac-59om)
     Given the home config file with mode "644" contains:
       """

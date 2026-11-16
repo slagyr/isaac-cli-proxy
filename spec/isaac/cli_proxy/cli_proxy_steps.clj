@@ -343,6 +343,7 @@
 (defn home-config-with-mode [mode content]
   (let [content (interpolate content)]
     (file-with-mode (str (tmp-dir) "/.config/isaac.edn") mode content)
+    (g/assoc! :user-home (tmp-dir))
     (g/assoc! :remote-home-config (get-in (edn/read-string content) [:cli :remote]))
     (g/assoc! :remote-home-config-mode (parse-mode mode))))
 

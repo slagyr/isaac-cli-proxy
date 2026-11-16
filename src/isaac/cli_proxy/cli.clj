@@ -76,19 +76,27 @@
             (println (str "remote CLI configured: " name " " url))
             0))))))
 
-(declare list-remotes!)
+(defn- remote-help []
+  (str/join "\n"
+            (concat [(registry/command-help (assoc (registry/get-command "remote")
+                                                   :id nil :help-text nil :option-spec option-spec))
+                     "       isaac remote <url>/cli -- <command...>"
+                     "       isaac remote use <name> <url> [--token-env VAR | --token-command CMD | --token-file PATH]"
+                     "       isaac remote list"
+                     "       isaac remote remove <name>"
+                     "       isaac remote status [<name>]"
+                     "Remotes live in ~/.config/isaac.edn under :cli :remotes."]
+                    (when (seq (remotes))
+                      (concat ["Configured remotes:"]
+                              (for [[name {:keys [url]}] (sort-by (comp clojure.core/name key) (remotes))]
+                                (str (clojure.core/name name) "  " url "  isaac remote "
+                                     (clojure.core/name name) " -- <command>")))))))
+
+(defmethod cli-api/help :remote [_id]
+  (remote-help))
 
 (defn- help-remote! []
-  (println (registry/command-help (registry/get-command "remote")))
-  (println "       isaac remote <url>/cli -- <command...>")
-  (println "       isaac remote use <name> <url> [--token-env VAR | --token-command CMD | --token-file PATH]")
-  (println "       isaac remote list")
-  (println "       isaac remote remove <name>")
-  (println "       isaac remote status [<name>]")
-  (println "Remotes live in ~/.config/isaac.edn under :cli :remotes.")
-  (when (seq (remotes))
-    (println "Configured remotes:")
-    (list-remotes!))
+  (println (cli-api/help :remote))
   0)
 
 (defn- list-remotes! []
@@ -177,6 +185,7 @@
    :usage       "remote <name> -- <command...>"
    :summary     "Run an isaac command on a remote server over /cli"
    :option-spec option-spec
+   :help-text   remote-help
    :run-fn      run-fn})
 
 (defmethod cli-api/run :remote [_id opts]
