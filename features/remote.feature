@@ -297,46 +297,126 @@ Feature: remote CLI proxy
     And the stdout does not contain "replayed"
     And the exit code is 0
 
-  # --- isaac-gar0: the remote setting and failure reporting --------------------
-  # Routing itself (launcher decides from ~/.config/isaac.edn) is proved in
-  # isaac-foundation features/cli/remote_routing.feature; these cover the
-  # module's half: managing the setting and reporting why a remote failed.
+  # --- isaac-hu1n: named remotes ------------------------------------------------
+  # Hosts live by name in ~/.config/isaac.edn under :cli :remotes; cli-proxy owns
+  # the setting (foundation never reads it — isaac-ewua). `isaac remote <name> --`
+  # runs a command on that host; a plain `isaac …` always runs locally.
 
-  Scenario: remote use writes the setting and preserves the root pointer (isaac-gar0)
+  @wip
+  Scenario: a named remote runs the command on its host with its token (isaac-hu1n)
+    Given a stub /cli server that replies with frames:
+      | type   | data  | code |
+      | stdout | hello |      |
+      | exit   |       | 0    |
+    And environment variable "ZANE_TOK" is "zane-secret"
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "${stub.url}" :token "${ZANE_TOK}"}}}}
+      """
+    When isaac remote is run with "zane -- echo hello"
+    Then the stub server received frames:
+      | type  | argv             |
+      | start | ["echo","hello"] |
+    And the stub connection authorization is "Bearer zane-secret"
+    And the stdout contains "hello"
+    And the exit code is 0
+
+  @wip
+  Scenario: a token command supplies the bearer credential (isaac-hu1n)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "${stub.url}" :token {:command "printf cmd-secret"}}}}}
+      """
+    When isaac remote is run with "zane -- version"
+    Then the stub connection authorization is "Bearer cmd-secret"
+    And the stdout does not contain "cmd-secret"
+    And the exit code is 0
+
+  @wip
+  Scenario: a failing token command names the remote and connects to nothing (isaac-hu1n)
+    Given a stub /cli server that replies with frames:
+      | type | code |
+      | exit | 0    |
+    And the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "${stub.url}" :token {:command "false"}}}}}
+      """
+    When isaac remote is run with "zane -- version"
+    Then the stderr contains "zane: token command failed"
+    And the stub server received no connection
+    And the exit code is 1
+
+  @wip
+  Scenario: an unknown remote name lists the configured names (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
-      {:root "/tmp/user/.isaac"}
+      {:cli {:remotes {:zane {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}
+                       :yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}}}}
       """
-    When isaac remote is run with "use wss://zanebot.example/cli --token-env ZANE_TOK"
+    When isaac remote is run with "nope -- version"
+    Then the stderr contains "unknown remote: nope (configured: yopp, zane)"
+    And the exit code is 1
+
+  @wip
+  Scenario: remote use adds a named remote and keeps the root pointer and other remotes (isaac-hu1n)
+    Given the home config file with mode "644" contains:
+      """
+      {:root "/tmp/user/.isaac"
+       :cli  {:remotes {:yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}}}}
+      """
+    When isaac remote is run with "use zane wss://zanebot.example/cli --token-command 'printf zane-secret'"
     Then the exit code is 0
     And the home config file matches:
       """
       {:root "/tmp/user/.isaac"
-       :cli  {:remote {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}
+       :cli  {:remotes {:yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}
+                        :zane {:url "wss://zanebot.example/cli" :token {:command "printf zane-secret"}}}}}
       """
 
-  Scenario: remote use with a literal token writes a private file (isaac-gar0)
+  @wip
+  Scenario: remote use with a token file writes a private config (isaac-hu1n)
     Given a file "${tmp}/token" with mode "600" containing "literal-secret"
-    When isaac remote is run with "use wss://zanebot.example/cli --token-file ${tmp}/token"
+    When isaac remote is run with "use zane wss://zanebot.example/cli --token-file ${tmp}/token"
     Then the exit code is 0
     And the home config file has mode "600"
+    And the home config file contains ":remotes {:zane"
     And the home config file contains "literal-secret"
     And the stdout does not contain "literal-secret"
 
-  Scenario: remote off removes the setting and keeps everything else (isaac-gar0)
+  @wip
+  Scenario: remote list shows each remote with a ready-to-use command line (isaac-hu1n)
+    Given the home config file with mode "644" contains:
+      """
+      {:cli {:remotes {:zane {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}
+                       :yopp {:url "wss://yopp.example/cli" :token {:command "printf y"}}}}}
+      """
+    When isaac remote is run with "list"
+    Then the stdout contains "zane  wss://zanebot.example/cli  isaac remote zane -- <command>"
+    And the stdout contains "yopp  wss://yopp.example/cli  isaac remote yopp -- <command>"
+    And the stdout does not contain "printf y"
+    And the exit code is 0
+
+  @wip
+  Scenario: remote remove drops one remote and keeps everything else (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
       {:root "/tmp/user/.isaac" :other 1
-       :cli  {:remote {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}}}
+       :cli  {:remotes {:zane {:url "wss://zanebot.example/cli" :token "${ZANE_TOK}"}
+                        :yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}}}}
       """
-    When isaac remote is run with "off"
+    When isaac remote is run with "remove zane"
     Then the exit code is 0
     And the home config file matches:
       """
-      {:root "/tmp/user/.isaac" :other 1}
+      {:root "/tmp/user/.isaac" :other 1
+       :cli  {:remotes {:yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}}}}
       """
 
-  Scenario: remote status reports the target and a successful probe (isaac-gar0)
+  @wip
+  Scenario: remote status probes a named remote (isaac-hu1n)
     Given a stub /cli server that replies with frames:
       | type   | data  | code |
       | stdout | 0.1.0 |      |
@@ -344,17 +424,18 @@ Feature: remote CLI proxy
     And environment variable "ZANE_TOK" is "probe-secret"
     And the home config file with mode "644" contains:
       """
-      {:cli {:remote {:url "${stub.url}" :token "${ZANE_TOK}"}}}
+      {:cli {:remotes {:zane {:url "${stub.url}" :token "${ZANE_TOK}"}}}}
       """
-    When isaac remote is run with "status"
+    When isaac remote is run with "status zane"
     Then the stdout contains "${stub.url}"
     And the stdout contains "reachable"
     And the stdout does not contain "probe-secret"
     And the exit code is 0
 
-  Scenario: remote status with no setting says so (isaac-gar0)
+  @wip
+  Scenario: remote status with no remotes says so (isaac-hu1n)
     When isaac remote is run with "status"
-    Then the stdout contains "not configured"
+    Then the stdout contains "no remotes configured"
     And the exit code is 0
 
   Scenario: a rejected token is reported as an auth failure (isaac-gar0)
