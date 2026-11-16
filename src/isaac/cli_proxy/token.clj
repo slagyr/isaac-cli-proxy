@@ -2,6 +2,7 @@
   "Resolve remote bearer credentials without exposing secrets in argv."
   (:require
     [clojure.edn :as edn]
+    [clojure.java.shell :as shell]
     [c3kit.apron.env :as c3env]
     [clojure.string :as str]
     [isaac.foundation.config.env :as config-env]
@@ -50,8 +51,8 @@
 
 (defn resolve-token
   "Resolve a remote token. Returns {:token ... :source ...}, nil, or {:exit 1 :error ...}."
-  [{:keys [url token-file token-env env env-fn read-file file-mode home-config home-config-mode]
-    :or   {env {} read-file slurp file-mode posix-mode}}]
+  [{:keys [url token-file token-env env env-fn read-file file-mode home-config home-config-mode name command-run]
+    :or   {env {} read-file slurp file-mode posix-mode command-run #(shell/sh "sh" "-c" %)}}]
   (cond
     token-file
     (if-not (secure-mode? (file-mode token-file))
@@ -72,16 +73,23 @@
     (let [{file-path :path file-remote :remote}
           (when-not home-config (read-home-config read-file))
           remote (or home-config file-remote)
-          mode   (or home-config-mode (when file-path (file-mode file-path)))
+          mode   (or home-config-mode (when file-path (file-mode file-path))
+                     (when home-config (try (file-mode (home-config-path)) (catch Exception _ nil))))
           value  (:token remote)]
       (when (and remote (or (nil? url) (= url (:url remote))))
-        (if-let [expanded (expand-env value env env-fn)]
-          {:token expanded :source :home-config}
-          (when-let [literal (present value)]
+        (if (and (map? value) (:command value))
+          (let [result (try (command-run (:command value)) (catch Exception _ nil))
+                secret (present (:out result))]
+            (if (and (zero? (or (:exit result) 1)) secret)
+              {:token secret :source :token-command}
+              {:exit 1 :error (str (or name "remote") ": token command failed")}))
+          (if-let [expanded (expand-env value env env-fn)]
+            {:token expanded :source :home-config}
+            (when-let [literal (present value)]
             (if (secure-mode? mode)
               {:token literal :source :home-config}
               {:exit 1 :error (str "remote config with a literal token must be private; chmod 600 "
-                                   (or file-path (home-config-path)))})))))))
+                                   (or file-path (home-config-path)))}))))))))
 
 (defn- env-value [name]
   (or (config-env/env name) (c3env/env name)))

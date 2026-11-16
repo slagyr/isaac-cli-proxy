@@ -302,7 +302,6 @@ Feature: remote CLI proxy
   # the setting (foundation never reads it — isaac-ewua). `isaac remote <name> --`
   # runs a command on that host; a plain `isaac …` always runs locally.
 
-  @wip
   Scenario: a named remote runs the command on its host with its token (isaac-hu1n)
     Given a stub /cli server that replies with frames:
       | type   | data  | code |
@@ -321,7 +320,6 @@ Feature: remote CLI proxy
     And the stdout contains "hello"
     And the exit code is 0
 
-  @wip
   Scenario: a token command supplies the bearer credential (isaac-hu1n)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -335,7 +333,6 @@ Feature: remote CLI proxy
     And the stdout does not contain "cmd-secret"
     And the exit code is 0
 
-  @wip
   Scenario: a failing token command names the remote and connects to nothing (isaac-hu1n)
     Given a stub /cli server that replies with frames:
       | type | code |
@@ -349,7 +346,6 @@ Feature: remote CLI proxy
     And the stub server received no connection
     And the exit code is 1
 
-  @wip
   Scenario: an unknown remote name lists the configured names (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
@@ -360,7 +356,6 @@ Feature: remote CLI proxy
     Then the stderr contains "unknown remote: nope (configured: yopp, zane)"
     And the exit code is 1
 
-  @wip
   Scenario: remote use adds a named remote and keeps the root pointer and other remotes (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
@@ -376,7 +371,6 @@ Feature: remote CLI proxy
                         :zane {:url "wss://zanebot.example/cli" :token {:command "printf zane-secret"}}}}}
       """
 
-  @wip
   Scenario: remote use with a token file writes a private config (isaac-hu1n)
     Given a file "${tmp}/token" with mode "600" containing "literal-secret"
     When isaac remote is run with "use zane wss://zanebot.example/cli --token-file ${tmp}/token"
@@ -386,7 +380,6 @@ Feature: remote CLI proxy
     And the home config file contains "literal-secret"
     And the stdout does not contain "literal-secret"
 
-  @wip
   Scenario: remote list shows each remote with a ready-to-use command line (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
@@ -399,7 +392,6 @@ Feature: remote CLI proxy
     And the stdout does not contain "printf y"
     And the exit code is 0
 
-  @wip
   Scenario: remote remove drops one remote and keeps everything else (isaac-hu1n)
     Given the home config file with mode "644" contains:
       """
@@ -415,7 +407,6 @@ Feature: remote CLI proxy
        :cli  {:remotes {:yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOK}"}}}}
       """
 
-  @wip
   Scenario: remote status probes a named remote (isaac-hu1n)
     Given a stub /cli server that replies with frames:
       | type   | data  | code |
@@ -432,7 +423,6 @@ Feature: remote CLI proxy
     And the stdout does not contain "probe-secret"
     And the exit code is 0
 
-  @wip
   Scenario: remote status with no remotes says so (isaac-hu1n)
     When isaac remote is run with "status"
     Then the stdout contains "no remotes configured"

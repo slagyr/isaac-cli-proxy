@@ -9,7 +9,7 @@ the WebSocket wire client, and reconnect/resume. Foundation's own chapter
 vocabulary table; read it for that context. Routing to a remote server is
 always explicit — there is no transparent default-remote mode for an
 ordinary `isaac <command>`; every remote invocation goes through the
-`isaac remote <url>/cli -- <command...>` form this chapter documents. This
+`isaac remote <name|url>/cli -- <command...>` form this chapter documents. This
 chapter's own topic id is `isaac.cli-proxy`.
 
 isaac-cli-proxy does not know what happens to a command once it lands on the
@@ -21,63 +21,49 @@ speak is written down once, in `PROTOCOL.md` in this repo (a canonical copy
 also lives in isaac-cli-server) — this chapter describes the behavior that
 contract produces, not the frame format itself.
 
-## The remote target
+## Named remote targets
 
-**What it is.** A single optional setting, `:cli :remote` (`{:url "…"
-:token "…"}`), stored not in Isaac's regular config tree but in the
-operator's **home pointer file** (`~/.config/isaac.edn` — the same file that
-can carry `:root`). This module is the only reader of it: `isaac.cli-proxy.cli`
-(the `remote` command) and `isaac.cli-proxy.token` (the Authentication
-resolution chain, below) are the two places that look at the key. Saving a
-target with `remote use` has no effect on an ordinary `isaac <command>` —
-Isaac has no implicit remote-by-default routing. `remote status` reads the
-setting to know which URL to probe, and token resolution falls back to it
-as a last resort; running a command against that target is always the
-explicit `isaac remote <url>/cli -- <command...>` form (below).
+The optional home pointer file `~/.config/isaac.edn` stores named targets under
+`:cli :remotes`, alongside `:root` and any other bootstrap settings. This module
+owns the targets; foundation does not read them. No command routes remotely by
+default: ordinary `isaac <command>` always runs locally. Explicitly select a
+host by name (`isaac remote zane -- sessions list`) or by URL
+(`isaac remote wss://host/cli -- sessions list`). A URL lookup also honors the
+legacy single `:cli :remote` token when the URLs match.
 
-Because the pointer file is read before config exists, it has **no config
-schema** and **no `handbook__configure` path** — same stance foundation
-takes on `:root` in that same file. Manage it with the `remote` command
-itself:
-
-```
-isaac remote use wss://<host>/cli --token-env ZANE_TOK
-isaac remote off
-isaac remote status
+```clojure
+{:root "/Users/me/.isaac"
+ :cli {:remotes {:zane {:url "wss://zanebot.example/cli"
+                        :token {:command "security find-generic-password -s zanebot-cli-token -w"}}
+                 :yopp {:url "wss://yopp.example/cli" :token "${YOPP_TOKEN}"}}}}
 ```
 
-`remote use <url>` writes `{:cli {:remote {:url ...}}}` into the pointer
-file, preserving every other key already there (including `:root`).
-Whichever token source is given (see Authentication, below) is recorded
-alongside it: a `--token-env VAR` writes the literal string `${VAR}` (not
-the value), so it only ever resolves through the named environment
-variable; a `--token-file PATH` reads the file once and writes that literal
-secret into the pointer file, and in that one case the file is also
-chmod'd to `600` so the secret isn't left group/world-readable. `remote
-off` removes just the `:cli :remote` key (dropping the now-empty `:cli`
-table too, if that was its only entry) and leaves the rest of the pointer
-file untouched. `remote status` reports "not configured", or probes the
-configured URL with a real `--version` round-trip and reports
-"reachable"/"unreachable" plus its exit code — it never prints the token.
+Manage each target independently; `use` and `remove` preserve the root pointer,
+other config keys and other remotes:
 
-**How to change it.** CLI-only, as above — there is nothing here for
-`handbook__configure` to reach.
+```
+isaac remote use zane wss://zanebot.example/cli --token-command 'security find-generic-password -s zanebot-cli-token -w'
+isaac remote use yopp wss://yopp.example/cli --token-env YOPP_TOKEN
+isaac remote list
+isaac remote status zane
+isaac remote remove yopp
+```
 
-**How to verify.** `isaac remote status`. A stale or wrong setting shows up
-immediately as "unreachable" rather than silently falling back to local.
+`use` replaces one name. `--token-command CMD` records the command, not its
+output; the command runs at use time (when connecting), and trimmed stdout
+becomes the bearer credential. Failure, an empty result, or an unknown name
+is an error before connecting. `--token-file PATH` reads a mode-600 file and
+stores its literal token in the home pointer file, chmod'd 600. `list` prints
+names, URLs and ready-to-use invocations but never secrets and never probes.
+`status` probes the named host with `--version` and prints the URL and
+reachability; with no remotes configured it says so.
 
-### Troubleshooting
+Micah's hand-written wrappers can be one-liners (no generated shims):
 
-- **`isaac remote status` says "not configured"** but you expected a
-  target. Check you're reading the same pointer file the CLI is: it's
-  always `~/.config/isaac.edn` for the *current* user running the command,
-  not the target server's.
-- **A setting written by `remote use` doesn't seem to affect ordinary
-  commands** (`isaac sessions list` still runs locally). That's expected,
-  not a bug — Isaac has no implicit remote-by-default routing. The setting
-  only feeds `remote status` and the Authentication fallback (below);
-  running a command against that target always takes the explicit `isaac
-  remote <url>/cli -- <command...>` form.
+```
+exec isaac remote zane -- "$@"
+exec toad acp "isaac remote zane -- acp --crew zane" "$@"
+```
 
 ## Running a command on a remote server
 
@@ -133,11 +119,12 @@ one strict order, first match wins:
    hard error naming the variable, not a silent empty token.
 3. `ISAAC_REMOTE_TOKEN` — the same environment variable, tried
    automatically with no flag.
-4. The pointer file's `:cli :remote :token`, but **only when the URL on
-   the command line matches the URL recorded there** — a token saved for
-   one server is never sent to a different one. A `${VAR}` value there is
-   expanded from the environment; a literal value is honored only if the
-   pointer file itself is mode `600`, exactly like a token file.
+4. The named remote's `:token` (or the legacy `:cli :remote :token` for
+   a URL-matched target): `${VAR}` reads the environment, a literal requires
+   the home pointer file to be mode 600, and `{:command "…"}` runs at connect
+   time and uses trimmed stdout. A failed or empty command refuses connection
+   without leaking its output. An explicit token file or env flag overrides
+   a named remote token.
 
 The older `--token TOKEN` flag still authenticates, but it's deprecated:
 passing a secret on the command line exposes it in the process list and
@@ -151,7 +138,7 @@ filesystem layer (mode bits) instead of `${VAR}`-in-config redaction, since
 the pointer file predates config entirely.
 
 **How to change it.** Pick the resolution source that fits: an env var for
-a script, `--token-file` for a long-lived secret on disk, or `remote use
+a script, `--token-file` for a long-lived secret on disk, or `remote use <name> <url>
 --token-env VAR` / `--token-file PATH` to bake the choice into the pointer
 file so plain `isaac remote <url>/cli -- ...` needs no flags at all.
 

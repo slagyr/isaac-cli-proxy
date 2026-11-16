@@ -249,7 +249,7 @@
                                                                [name (or (config-env/env name) (c3env/env name))]))
                                                         (remove nil? [token/DEFAULT_ENV (:token-env %)]))
                                              :env-fn feature-env
-                                             :home-config (g/get :remote-home-config)
+                                             :home-config (or (:home-config %) (g/get :remote-home-config))
                                              :home-config-mode (g/get :remote-home-config-mode)))]
         (g/assoc! :exit-code
                   (remote-cli/run-fn (merge extra-opts {:_raw-args argv :token-resolver resolver})))))

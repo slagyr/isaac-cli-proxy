@@ -33,6 +33,26 @@
     (should= {:exit 1 :error "remote token environment variable SHIP_TOKEN is unset or blank"}
              (sut/resolve-token {:url "wss://ship/cli" :token-env "SHIP_TOKEN" :env {}})))
 
+  (it "runs a named remote token command and trims its output"
+    (should= {:token "keychain-secret" :source :token-command}
+             (sut/resolve-token {:name "zane" :url "wss://ship/cli"
+                                 :home-config {:url "wss://ship/cli" :token {:command "get-key"}}
+                                 :command-run (fn [_] {:exit 0 :out "keychain-secret\n"})})))
+
+  (it "rejects a blank token command result without connecting"
+    (should= {:exit 1 :error "zane: token command failed"}
+             (sut/resolve-token {:name "zane" :url "wss://ship/cli"
+                                 :home-config {:url "wss://ship/cli" :token {:command "get-key"}}
+                                 :command-run (fn [_] {:exit 0 :out "\n"})})))
+
+  (it "explicit token files override a named remote token command"
+    (should= {:token "file-secret" :source :token-file}
+             (sut/resolve-token {:name "zane" :url "wss://ship/cli"
+                                 :home-config {:url "wss://ship/cli" :token {:command "get-key"}}
+                                 :token-file "/tmp/token" :read-file (constantly "file-secret")
+                                 :file-mode (constantly 0600)
+                                 :command-run (fn [_] (throw (ex-info "unexpected" {})))})))
+
   (it "uses ISAAC_REMOTE_TOKEN by default"
     (should= {:token "default-secret" :source :default-env}
              (sut/resolve-token {:url "wss://ship/cli"

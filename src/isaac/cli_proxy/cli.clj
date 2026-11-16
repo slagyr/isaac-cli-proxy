@@ -20,6 +20,7 @@
   [[nil "--token TOKEN" "Deprecated: bearer token in argv (use a secure source below)"]
    [nil "--token-file PATH" "Read bearer token from a mode-600 file"]
    [nil "--token-env VAR" "Read bearer token from the named environment variable"]
+   [nil "--token-command CMD" "Run a command to retrieve the token (remote use only)"]
    ["-h" "--help" "Show help"]])
 
 (defmethod cli-api/option-spec :remote [_id]
@@ -41,45 +42,81 @@
   (binding [*out* *err*]
     (println "isaac remote: --token exposes the secret in the process list; use --token-file, --token-env, or ISAAC_REMOTE_TOKEN")))
 
+(defn- remotes []
+  (get-in (pointer/read-config) [:cli :remotes] {}))
+
+(defn- remote-name [name]
+  (keyword name))
+
+(defn- unknown-remote! [name]
+  (cli-common/print-cli-error!
+    (str "unknown remote: " name " (configured: "
+         (str/join ", " (sort (map clojure.core/name (keys (remotes))))) ")")))
+
 (defn- use-remote! [args]
-  (let [{:keys [url token-file token-env errors]} (parse-remote-opts args)]
+  (let [{:keys [arguments errors options]} (cli-common/parse-option-map (vec args) option-spec)
+        [name url] arguments
+        token-file (:token-file options)
+        token-env (:token-env options)
+        token-command (:token-command options)]
     (cond
       (seq errors) (cli-common/print-cli-errors! errors)
-      (str/blank? url) (cli-common/print-cli-error! "remote use: missing WebSocket URL")
+      (or (str/blank? name) (str/blank? url))
+      (cli-common/print-cli-error! "remote use: missing name or WebSocket URL")
       :else
-      (let [literal (when token-file (str/trim (slurp token-file)))
-            token   (cond literal literal token-env (str "${" token-env "}"))
-            config  (assoc-in (pointer/read-config) [:cli :remote] (cond-> {:url url} token (assoc :token token)))]
-        (pointer/write-config! config (boolean literal))
-        (println (str "remote CLI configured: " url))
-        0))))
+      (let [resolved (when token-file (token/resolve-system-token {:token-file token-file}))]
+        (if (:error resolved)
+          (cli-common/print-cli-error! (:error resolved))
+          (let [value  (cond token-file (:token resolved)
+                             token-env (str "${" token-env "}")
+                             token-command {:command token-command})
+                config (assoc-in (pointer/read-config) [:cli :remotes (remote-name name)]
+                                 (cond-> {:url url} value (assoc :token value)))]
+            (pointer/write-config! config (boolean token-file))
+            (println (str "remote CLI configured: " name " " url))
+            0))))))
 
-(defn- off-remote! []
-  (let [config (update (pointer/read-config) :cli #(not-empty (dissoc (or % {}) :remote)))]
-    (pointer/write-config! (if (:cli config) config (dissoc config :cli)) false)
-    (println "remote CLI disabled")
-    0))
+(defn- list-remotes! []
+  (doseq [[name {:keys [url]}] (sort-by (comp clojure.core/name key) (remotes))]
+    (println (str (clojure.core/name name) "  " url "  isaac remote "
+                  (clojure.core/name name) " -- <command>")))
+  0)
+
+(defn- remove-remote! [name]
+  (if (contains? (remotes) (remote-name name))
+    (let [config (update-in (pointer/read-config) [:cli :remotes] dissoc (remote-name name))]
+      (pointer/write-config! config false)
+      (println (str "remote removed: " name))
+      0)
+    (unknown-remote! name)))
 
 (declare run)
 
-(defn- status-remote! [opts]
-  (if-let [remote (get-in (pointer/read-config) [:cli :remote])]
-    (let [code (run (assoc opts :_raw-args [(:url remote) "--" "--version"]))]
-      (println (str (:url remote) (if (zero? code) " reachable" " unreachable")))
-      code)
-    (do (println "remote CLI not configured") 0)))
+(defn- status-remote! [opts name]
+  (if (and (nil? name) (empty? (remotes)))
+    (do (println "no remotes configured") 0)
+    (if-let [remote (get (remotes) (remote-name name))]
+      (let [code (run (assoc opts :_raw-args [name "--" "--version"]))]
+        (println (str (:url remote) (if (zero? code) " reachable" " unreachable")))
+        code)
+      (unknown-remote! (or name "")))))
 
 (defn run [opts]
   (let [raw (vec (:_raw-args opts))
         sub (first raw)]
     (cond
       (= "use" sub) (use-remote! (subvec raw 1))
-      (= "off" sub) (off-remote!)
-      (= "status" sub) (status-remote! opts)
+      (= "list" sub) (list-remotes!)
+      (= "remove" sub) (remove-remote! (second raw))
+      (= "status" sub) (status-remote! opts (second raw))
       :else
       (let [{:keys [url remote-argv token token-file token-env help errors]}
         (parse-remote-opts (:_raw-args opts))
-        resolve-token (or (:token-resolver opts) token/resolve-system-token)]
+        resolve-token (or (:token-resolver opts) token/resolve-system-token)
+        named? (and url (not (str/includes? url "://")))
+        named (when named? (get (remotes) (remote-name url)))
+        name (when named? url)
+        target-url (if named? (:url named) url)]
     (cond
       help
       (do (println (registry/command-help (registry/get-command "remote"))) 0)
@@ -90,14 +127,18 @@
       (or (nil? url) (str/blank? url))
       (cli-common/print-cli-error! "remote: missing WebSocket URL")
 
+      (and named? (nil? named))
+      (unknown-remote! name)
+
       :else
       (let [resolved (when-not token
-                       (resolve-token {:url url :token-file token-file :token-env token-env}))]
+                       (resolve-token {:url target-url :name name :home-config named
+                                       :token-file token-file :token-env token-env}))]
         (cond
           token
           (do
             (warn-deprecated-token!)
-            (proxy/run-proxy! {:url url :argv remote-argv :token token
+            (proxy/run-proxy! {:url target-url :argv remote-argv :token token
                                :connection-factory (:connection-factory opts)}))
 
           (:error resolved)
@@ -108,7 +149,7 @@
             (when-not (:token resolved)
               (binding [*out* *err*]
                 (println "isaac remote: no bearer token resolved; tried --token-file, --token-env, ISAAC_REMOTE_TOKEN, and ~/.config/isaac.edn")))
-            (proxy/run-proxy! {:url url :argv remote-argv :token (:token resolved)
+            (proxy/run-proxy! {:url target-url :argv remote-argv :token (:token resolved)
                                :connection-factory (:connection-factory opts)})))))))))
 
 (defn run-fn [opts]
@@ -118,7 +159,7 @@
   "Factory for feature tests and module registration."
   []
   {:name        "remote"
-   :usage       "remote <url>/cli -- <command...>"
+   :usage       "remote <name|url>/cli -- <command...>"
    :summary     "Run an isaac command on a remote server over /cli"
    :option-spec option-spec
    :run-fn      run-fn})
