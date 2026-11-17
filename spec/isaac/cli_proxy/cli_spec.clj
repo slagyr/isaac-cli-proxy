@@ -6,6 +6,9 @@
     [isaac.cli-proxy.cli :as sut]
     [isaac.foundation.config.api :as config-api]
     [isaac.foundation.nexus :as nexus]
+    [isaac.foundation.fs :as fs]
+    [isaac.cli-proxy.proxy :as proxy]
+    [isaac.cli-proxy.token :as token]
     [speclj.core :refer :all]))
 
 (describe "parse-remote-opts"
@@ -45,6 +48,30 @@
   (around [example]
     (nexus/-with-nested-nexus {:root "/tmp"}
       (example)))
+
+  (it "uses the own loopback server token when no other token is configured"
+    (let [mem (fs/mem-fs)
+          sent (atom nil)]
+      (fs/spit mem "/grover/state/cli-server.edn"
+               "{:url \"ws://127.0.0.1:4567/cli\" :token \"host-secret\"}")
+      (with-redefs [token/resolve-system-token (constantly nil)
+                    proxy/run-proxy! (fn [opts] (reset! sent opts) 0)]
+        (should= 0 (sut/run {:root "/grover" :fs mem
+                             :_raw-args ["ws://127.0.0.1:4567/cli" "--" "fx-where"]}))
+        (should= "host-secret" (:token @sent))
+        (should= ["fx-where"] (:argv @sent)))))
+
+  (it "does not use the own server token for a different port"
+    (let [mem (fs/mem-fs)
+          sent (atom nil)]
+      (fs/spit mem "/grover/state/cli-server.edn"
+               "{:url \"ws://127.0.0.1:4567/cli\" :token \"host-secret\"}")
+      (with-redefs [token/resolve-system-token (constantly nil)
+                    proxy/run-proxy! (fn [opts] (reset! sent opts) 0)]
+        (should= 0 (binding [*err* (java.io.StringWriter.)]
+                     (sut/run {:root "/grover" :fs mem
+                               :_raw-args ["ws://127.0.0.1:9999/cli" "--" "fx-where"]})))
+        (should-be-nil (:token @sent)))))
 
   (it "declares remote as local-only"
     (let [manifest (edn/read-string (slurp "src/isaac-manifest.edn"))]

@@ -16,7 +16,8 @@ server restart.
 
 ## Authentication
 
-Remote bearer credentials resolve in this order:
+Remote bearer credentials resolve in this order (for the host’s own loopback
+server, `state/cli-server.edn` supplies the token when none is configured):
 
 1. `--token-file PATH` (the file must be mode 600 or otherwise inaccessible to group/world)
 2. `--token-env VAR`

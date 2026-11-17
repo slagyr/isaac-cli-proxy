@@ -199,9 +199,6 @@
 
 (defn server-only-grover-setup []
   (root-steps/initialize-root! "target/test-state" false)
-  ;; The explicit remote uses normal configured HTTP auth, not the discovery
-  ;; file (which the scenario deliberately replaces with a stale address).
-  (swap! c3env/-overrides assoc "ISAAC_REMOTE_TOKEN" "fixture-remote-secret")
   (session-steps/ensure-grover-provider-files!)
   (fs/mkdirs (feature-fs) (str (g/get :root) "/config/crew"))
   (fs/spit (feature-fs) (str (g/get :root) "/config/crew/main.edn")
@@ -212,6 +209,7 @@
 
 (defn fixture-server-only [name]
   (server-only-grover-setup)
+  (swap! c3env/-overrides dissoc "ISAAC_REMOTE_TOKEN")
   (ensure-remote-command!)
   (ensure-cli-server-route!)
   (let [root (g/get :root)

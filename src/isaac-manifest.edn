@@ -6,12 +6,8 @@
 
  ;; CLI command contributed via the :isaac/cli berth. The implementing
  ;; namespace registers isaac.foundation.cli.api/run + /option-spec methods for :remote.
- :isaac/cli-forwarder {:server-only {:fn isaac.cli-proxy.forwarder/make-forwarder}}
-
  :isaac/cli
- {:--remote {:usage      "--remote <url> <server-only-command...>"
-             :summary    "Send a server-only command to a named CLI server"
-             :namespace  isaac.cli-proxy.explicit}
+ {
   :remote {:usage      "remote <name> -- <command...>"
            :summary    "Run an isaac command on a remote server over /cli"
            :namespace  isaac.cli-proxy.cli

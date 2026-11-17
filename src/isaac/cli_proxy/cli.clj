@@ -11,6 +11,7 @@
     [clojure.string :as str]
     [isaac.foundation.cli.api :as cli-api]
     [isaac.foundation.cli.registry :as registry]
+    [isaac.cli-proxy.local-server :as local-server]
     [isaac.cli-proxy.proxy :as proxy]
     [isaac.cli-proxy.token :as token]
     [isaac.foundation.config.cli.common :as cli-common]
@@ -168,11 +169,11 @@
           (cli-common/print-cli-error! (:error resolved))
 
           :else
-          (do
-            (when-not (:token resolved)
+          (let [resolved-token (or (:token resolved) (local-server/token opts target-url))]
+            (when-not resolved-token
               (binding [*out* *err*]
                 (println "isaac remote: no bearer token resolved; tried --token-file, --token-env, ISAAC_REMOTE_TOKEN, and ~/.config/isaac.edn")))
-            (proxy/run-proxy! {:url target-url :argv remote-argv :token (:token resolved)
+            (proxy/run-proxy! {:url target-url :argv remote-argv :token resolved-token
                                :connection-factory (:connection-factory opts)})))))))))
 
 (defn run-fn [opts]

@@ -126,6 +126,8 @@ one strict order, first match wins:
    time and uses trimmed stdout. A failed or empty command refuses connection
    without leaking its output. An explicit token file or env flag overrides
    a named remote token.
+5. For a loopback URL targeting this root’s own server, the token from
+   `state/cli-server.edn` if no other token was configured.
 
 The older `--token TOKEN` flag still authenticates, but it's deprecated:
 passing a secret on the command line exposes it in the process list and

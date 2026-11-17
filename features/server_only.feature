@@ -30,7 +30,6 @@ Feature: The host reaches its own server with isaac remote
       | url   | #"ws://127\.0\.0\.1:\d+/cli"            |
       | token | #".{20,}"                                |
 
-  @wip
   Scenario: a server-only command typed on the host refuses with the remote hint, even with its server running (isaac-crrm)
     Given config:
       | http.host       | 127.0.0.1 |
@@ -44,7 +43,6 @@ Feature: The host reaches its own server with isaac remote
     And the stdout does not contain "process"
     And the exit code is 2
 
-  @wip
   Scenario: isaac remote to the host's own server runs a server-only command there with the local token (isaac-crrm)
     Given config:
       | http.host       | 127.0.0.1 |
